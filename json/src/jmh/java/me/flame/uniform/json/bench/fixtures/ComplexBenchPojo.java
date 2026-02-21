@@ -1,0 +1,21 @@
+package me.flame.uniform.json.bench.fixtures;
+
+import me.flame.uniform.core.annotations.SerializedObject;
+
+@SerializedObject
+public class ComplexBenchPojo {
+    public int id;
+    public String name;
+    public SimpleBenchPojo child;
+    public int count;
+
+    public ComplexBenchPojo() {
+    }
+
+    public ComplexBenchPojo(int id, String name, SimpleBenchPojo child, int count) {
+        this.id = id;
+        this.name = name;
+        this.child = child;
+        this.count = count;
+    }
+}
