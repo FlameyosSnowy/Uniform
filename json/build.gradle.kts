@@ -21,7 +21,7 @@ repositories {
 
 dependencies {
     implementation(project(":core"))
-    implementation("com.github.FlameyosSnowy:TurboScanner:1.2.2")
+    implementation("com.github.FlameyosSnowy:TurboScanner:1.3.0")
 
     jmhImplementation("com.fasterxml.jackson.core:jackson-databind:2.17.1")
     jmhImplementation("com.google.code.gson:gson:2.11.0")
@@ -50,16 +50,16 @@ tasks.jmh {
     ))
 }
 
-tasks.register<JMHTask>("jmhWriterOverhead") {
+tasks.register<JMHTask>("jmhPrettyPrint") {
     dependsOn("jmhJar")
 
     jvmArgs.set(listOf(
         "--add-modules", "jdk.incubator.vector",
         "-Duniform.generatedModule=UniformGeneratedJsonModuleJmh"
     ))
-    includes.set(listOf("me.flame.uniform.json.bench.UniformWriterOverheadBenchmark"))
+    includes.set(listOf("me.flame.uniform.json.bench.JsonPrettyPrintBenchmark"))
     jarArchive.set(tasks.named<Jar>("jmhJar").flatMap { it.archiveFile })
-    resultsFile.set(layout.buildDirectory.file("results/jmh/writerOverhead.json"))
+    resultsFile.set(layout.buildDirectory.file("results/jmh/prettyPrint.json"))
 }
 
 tasks.named<JavaCompile>("compileJmhJava") {
