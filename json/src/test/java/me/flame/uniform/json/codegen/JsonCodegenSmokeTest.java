@@ -4,8 +4,13 @@ import me.flame.uniform.core.resolvers.ResolverRegistry;
 import me.flame.uniform.json.JsonAdapter;
 import me.flame.uniform.json.JsonConfig;
 import me.flame.uniform.json.codegen.fixtures.*;
+import me.flame.uniform.json.writers.prettifiers.DefaultPrettifyEngine;
+import me.flame.uniform.json.writers.prettifiers.JsonFormatter;
 import org.junit.jupiter.api.Test;
 
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
 import java.util.EnumSet;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -26,8 +31,32 @@ public class JsonCodegenSmokeTest {
         assertEquals("a", pojo.name);
 
         String json = adapter.writeValue(new SimplePojo(2, "b"));
+
         assertTrue(json.contains("\"id\":2"));
         assertTrue(json.contains("\"name\":\"b\""));
+    }
+
+    @Test
+    void pojo_format() {
+        JsonFormatter jsonFormatter = new JsonFormatter(Path.of("nothing"), 4);
+        String complexJson = """
+        {"id":1,"username":"flameyos","email":"flameyos@example.com","age":22,"active":true,"score":9823.5,"address":{"street":"123 Main St","city":"Amsterdam","zip":"1011AB","country":"NL"},"metadata":{"createdAt":1708123456789,"lastLogin":1708987654321,"loginCount":42}}
+        """;
+
+        System.out.println(complexJson);
+
+        ByteBuffer format = jsonFormatter.format(ByteBuffer.wrap(complexJson.getBytes(StandardCharsets.UTF_8)));
+        byte[] outputBytes = new byte[format.remaining()];
+        format.get(outputBytes);
+        String formattedJson = new String(outputBytes, StandardCharsets.UTF_8);
+        System.out.println(formattedJson);
+        
+        // Print hex representation of last few bytes for debugging
+        System.err.print("Last 10 bytes (hex): ");
+        for (int i = Math.max(0, outputBytes.length - 10); i < outputBytes.length; i++) {
+            System.err.printf("%02x ", outputBytes[i]);
+        }
+        System.err.println();
     }
 
     @Test
