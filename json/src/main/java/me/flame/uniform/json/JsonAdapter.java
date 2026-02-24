@@ -8,6 +8,7 @@ import me.flame.uniform.json.parser.lowlevel.JsonCursor;
 import me.flame.uniform.json.writers.JsonWriter;
 import me.flame.uniform.json.writers.JsonWriterFactory;
 import me.flame.uniform.json.writers.JsonWriterOptions;
+
 import org.jetbrains.annotations.NotNull;
 
 import java.nio.charset.StandardCharsets;
@@ -18,15 +19,17 @@ public class JsonAdapter<T> {
     private final JsonMapper<T> relatedMapper;
     private final JsonWriterMapper<T> relatedWriterMapper;
 
+    @SuppressWarnings("unchecked")
     public JsonAdapter(Class<T> elementType, JsonConfig config) {
         this.elementType = elementType;
         this.config = config;
 
-        //noinspection unchecked
         this.relatedMapper = (JsonMapper<T>) JsonMapperRegistry.getReader(elementType);
-
-        //noinspection unchecked
         this.relatedWriterMapper = (JsonWriterMapper<T>) JsonMapperRegistry.getWriter(elementType);
+    }
+
+    public static <T> JsonConfigBuilder builder(Class<T> ignored) {
+        return new JsonConfigBuilder();
     }
 
     public T readValue(@NotNull String json) {
