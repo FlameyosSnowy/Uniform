@@ -24,6 +24,8 @@ public class JsonAdapter<T> {
         this.elementType = elementType;
         this.config = config;
 
+        JsonMapperRegistry.applyConfig(config);
+
         this.relatedMapper = (JsonMapper<T>) JsonMapperRegistry.getReader(elementType);
         this.relatedWriterMapper = (JsonWriterMapper<T>) JsonMapperRegistry.getWriter(elementType);
     }
@@ -37,7 +39,7 @@ public class JsonAdapter<T> {
         return readValue(bytes);
     }
 
-    public T readValue(@NotNull byte[] bytes) {
+    public T readValue(byte[] bytes) {
         JsonCursor cursor = JsonCursors.create(bytes);
         return this.relatedMapper.map(cursor);
     }

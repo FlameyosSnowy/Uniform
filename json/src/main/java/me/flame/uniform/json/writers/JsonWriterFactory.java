@@ -9,8 +9,8 @@ import java.util.Arrays;
 import java.util.EnumSet;
 
 public class JsonWriterFactory {
-    public static JsonWriterFactory.Builder builder(JsonConfig config) {
-        return new JsonWriterFactory.Builder(config);
+    public static Builder builder(JsonConfig config) {
+        return new Builder(config);
     }
 
     public static class Builder {
@@ -31,12 +31,12 @@ public class JsonWriterFactory {
             boolean asyncWrite = options.contains(JsonWriterOptions.ASYNC_WRITES);
             JsonWriter simple = asyncWrite ? new AsyncSimpleJsonWriter() : new SimpleJsonWriter();
 
-            boolean asyncPrettify = options.contains(JsonWriterOptions.ASYNC_PRETTIFY);
             if (options.contains(JsonWriterOptions.PRETTY)) {
-                DefaultPrettifyEngine defaultPrettifyEngine = new DefaultPrettifyEngine(config.indentSize());
+                boolean asyncPrettify = options.contains(JsonWriterOptions.ASYNC_PRETTIFY);
+                DefaultPrettifyEngine engine = new DefaultPrettifyEngine(config);
                 return new PrettyJsonWriter(simple, asyncPrettify
-                    ? new AsyncDefaultPrettifyEngine(defaultPrettifyEngine)
-                    : defaultPrettifyEngine);
+                    ? new AsyncDefaultPrettifyEngine(engine)
+                    : engine);
             }
 
             return simple;

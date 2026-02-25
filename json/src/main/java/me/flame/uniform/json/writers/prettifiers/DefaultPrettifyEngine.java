@@ -1,22 +1,28 @@
 package me.flame.uniform.json.writers.prettifiers;
 
+import me.flame.uniform.json.JsonConfig;
+
 import java.nio.ByteBuffer;
 import java.nio.file.Path;
 
 import java.util.concurrent.CompletableFuture;
 
 public class DefaultPrettifyEngine implements PrettifyEngine {
-    private final int indentSize;
+    private final JsonConfig config;
 
+    public DefaultPrettifyEngine(JsonConfig config) {
+        this.config = config;
+    }
+
+    // Convenience constructor for callers that only care about indent size
     public DefaultPrettifyEngine(int indentSize) {
-        this.indentSize = indentSize;
+        this.config = new JsonConfig(false, indentSize, null, null);
     }
 
     @Override
     public CompletableFuture<ByteBuffer> prettify(ByteBuffer uglyBuffer, Path path) {
-        JsonFormatter jsonFormatter = new JsonFormatter(path, indentSize);
         return CompletableFuture.completedFuture(
-            jsonFormatter.format(uglyBuffer)
+            new JsonFormatter(path, config).format(uglyBuffer)
         );
     }
 }

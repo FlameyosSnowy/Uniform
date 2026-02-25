@@ -1,7 +1,10 @@
 package me.flame.uniform.json;
 
+import me.flame.uniform.core.resolvers.ResolverRegistry;
 import me.flame.uniform.json.features.JsonReadFeature;
 import me.flame.uniform.json.features.JsonWriteFeature;
+import me.flame.uniform.core.resolvers.TypeResolver;
+import me.flame.uniform.core.resolvers.ContextDynamicTypeSupplier;
 
 import java.util.Arrays;
 import java.util.Collection;
@@ -10,8 +13,8 @@ import java.util.EnumSet;
 public class JsonConfigBuilder {
     private boolean asyncWrites = false;
     private int indentSize = 4;
-    private EnumSet<JsonReadFeature> readFeatures;
-    private EnumSet<JsonWriteFeature> writeFeatures;
+    private EnumSet<JsonReadFeature> readFeatures = EnumSet.noneOf(JsonReadFeature.class);
+    private EnumSet<JsonWriteFeature> writeFeatures = EnumSet.noneOf(JsonWriteFeature.class);
 
     public JsonConfigBuilder setAsyncWrites(boolean asyncWrites) {
         this.asyncWrites = asyncWrites;
@@ -24,22 +27,26 @@ public class JsonConfigBuilder {
     }
 
     public JsonConfigBuilder setReadFeatures(EnumSet<JsonReadFeature> readFeatures) {
-        this.readFeatures = readFeatures;
+        this.readFeatures = readFeatures != null ? readFeatures : EnumSet.noneOf(JsonReadFeature.class);
         return this;
     }
 
     public JsonConfigBuilder setWriteFeatures(EnumSet<JsonWriteFeature> writeFeatures) {
-        this.writeFeatures = writeFeatures;
+        this.writeFeatures = writeFeatures != null ? writeFeatures : EnumSet.noneOf(JsonWriteFeature.class);
         return this;
     }
 
     public JsonConfigBuilder addReadFeatures(Collection<JsonReadFeature> readFeatures) {
-        this.readFeatures.addAll(readFeatures);
+        if (readFeatures != null) {
+            this.readFeatures.addAll(readFeatures);
+        }
         return this;
     }
 
     public JsonConfigBuilder addWriteFeatures(Collection<JsonWriteFeature> writeFeatures) {
-        this.writeFeatures.addAll(writeFeatures);
+        if (writeFeatures != null) {
+            this.writeFeatures.addAll(writeFeatures);
+        }
         return this;
     }
 
@@ -50,6 +57,34 @@ public class JsonConfigBuilder {
 
     public JsonConfigBuilder addWriteFeatures(JsonWriteFeature... writeFeatures) {
         this.writeFeatures.addAll(Arrays.asList(writeFeatures));
+        return this;
+    }
+    
+    public <T> JsonConfigBuilder addTypeResolver(Class<T> type, TypeResolver<? extends T> resolver) {
+        ResolverRegistry.register(type, resolver);
+        return this;
+    }
+    
+    public <T> JsonConfigBuilder addTypeSupplier(Class<T> type, ContextDynamicTypeSupplier<? extends T> supplier) {
+        ResolverRegistry.registerSupplier(type, supplier);
+        return this;
+    }
+    
+    public JsonConfigBuilder withDefaultReadFeatures() {
+        for (JsonReadFeature feature : JsonReadFeature.ALL) {
+            if (feature.isDefaultValue()) {
+                this.readFeatures.add(feature);
+            }
+        }
+        return this;
+    }
+    
+    public JsonConfigBuilder withDefaultWriteFeatures() {
+        for (JsonWriteFeature feature : JsonWriteFeature.ALL) {
+            if (feature.isDefaultValue()) {
+                this.writeFeatures.add(feature);
+            }
+        }
         return this;
     }
 
