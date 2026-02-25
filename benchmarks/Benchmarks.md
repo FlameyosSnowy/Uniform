@@ -8,7 +8,7 @@ Competitors:
 | Library | Version | Role |
 |---|---|---|
 | **Uniform** | this repo | read + write + pretty-print |
-| **Jackson Databind** | 2.17.1 | read + write + pretty-print |
+| **Jackson Databind** | 3.0.3 | read + write + pretty-print |
 | **Gson** | 2.11.0 | read + write + pretty-print |
 | **simdjson-java** | 0.3.0 | read only (parser, no write path) |
 
