@@ -302,6 +302,7 @@ public final class JsonStringWriter {
     private void writeAscii(String s) {
         final int len = s.length();
         ensure(len);
+
         for (int i = 0; i < len; i++)
             buf[pos++] = (byte) s.charAt(i);
     }
@@ -321,7 +322,7 @@ public final class JsonStringWriter {
                 buf[pos++] = (byte) (0x80 | ((c >> 6) & 0x3F));
                 buf[pos++] = (byte) (0x80 | (c & 0x3F));
             } else {
-                // Surrogate pair → 4-byte UTF-8
+                // Surrogate pair -> 4-byte UTF-8
                 ensure(4);
                 int cp = Character.toCodePoint(c, s.charAt(++i));
                 buf[pos++] = (byte) (0xF0 | (cp >> 18));
