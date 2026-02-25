@@ -15,7 +15,7 @@ public class JsonWriterFactory {
 
     public static class Builder {
         private final JsonConfig config;
-        private EnumSet<JsonWriterOptions> options;
+        private final EnumSet<JsonWriterOptions> options;
 
         public Builder(JsonConfig config) {
             this.config = config;

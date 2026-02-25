@@ -109,8 +109,6 @@ public final class JsonStringWriter {
         return this;
     }
 
-    // ── object values ────────────────────────────────────────────────────────
-
     public JsonStringWriter nullValue() {
         out.append("null");
         needComma = true;
@@ -245,7 +243,7 @@ public final class JsonStringWriter {
         int safe = 0;
         for (int i = 0; i < len; i++) {
             char c = s.charAt(i);
-            boolean needsEscape = c < 128 ? NEEDS_ESCAPE[c] : false;
+            boolean needsEscape = c < 128 && NEEDS_ESCAPE[c];
             if (needsEscape) {
                 // Flush safe prefix in one shot
                 if (i > safe) out.append(s, safe, i);

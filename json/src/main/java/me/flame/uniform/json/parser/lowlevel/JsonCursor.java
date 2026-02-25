@@ -303,7 +303,6 @@ public final class JsonCursor {
     public byte    fieldValueAsByte()   { return (byte)  parseInt(fieldValueStart, fieldValueLen); }
 
     public boolean fieldValueAsBoolean() {
-        // Branchless length-first dispatch — no method call overhead
         final byte[] inp = input;
         final int    s   = fieldValueStart;
         final int    len = fieldValueLen;
@@ -321,10 +320,6 @@ public final class JsonCursor {
             && input[s] == '\'' && input[s + len - 1] == '\'') return decodeJsonString(s + 1, len - 2);
         return new String(input, s, len, StandardCharsets.UTF_8);
     }
-
-    // ============================================================
-    // Array traversal
-    // ============================================================
 
     public boolean enterArray() {
         skipWs();
@@ -384,14 +379,10 @@ public final class JsonCursor {
         return new JsonCursor(input, scan, fieldValueStart, fieldValueStart + fieldValueLen, this);
     }
 
-    // ============================================================
-    // Whitespace skipping
-    // ============================================================
-
     /**
      * Fast path: pure whitespace skip using the lookup table.
      * Comment handling is pushed into a separate cold method to keep
-     * this path as tight as possible — JIT can inline and unroll freely.
+     * this path as tight as possible, JIT can inline and unroll freely.
      */
     private void skipWs() {
         final byte[] inp = input;
@@ -399,7 +390,6 @@ public final class JsonCursor {
         int p = pos;
         while (p < lim && WS[inp[p] & 0xFF]) p++;
         pos = p;
-        // Comment handling is rare — only pay for it when enabled
         if (anyComments) skipComments();
     }
 
@@ -426,93 +416,139 @@ public final class JsonCursor {
             }
 
             if (allowYamlComments && pos < lim && inp[pos] == '#') {
-                pos++;
-                while (pos < lim && inp[pos] != '\n') pos++;
+                do pos++;
+                while (pos < lim && inp[pos] != '\n');
                 again = true;
             }
         }
     }
 
-    // ============================================================
-    // String decoding
-    // ============================================================
-
     private @NotNull String decodeJsonString(int start, int len) {
         final byte[] inp = input;
         final int    end = start + len;
 
-        // Fast path: scan for backslash and control chars in one pass
         for (int i = start; i < end; i++) {
             final int b = inp[i] & 0xFF;
             if (b == '\\') return decodeJsonStringSlow(start, end);
             if (!allowUnescapedControlChars && b < 0x20)
                 throw error("Unescaped control character at byte " + i);
         }
-        // Zero escapes — single allocation
         return new String(inp, start, len, StandardCharsets.UTF_8);
     }
 
     private @NotNull String decodeJsonStringSlow(int start, int endExclusive) {
-        // Pre-size to avoid StringBuilder realloc — actual length <= endExclusive - start
-        final StringBuilder sb  = new StringBuilder(endExclusive - start);
-        final byte[]        inp = input;
-        int segStart = start;
+        final byte[] inp = input;
+        final int    len = endExclusive - start;
 
-        for (int i = start; i < endExclusive; i++) {
+        // Output buffer, worst case is same length as input (no escapes expand beyond input size
+        // except uXXXX which is 6 input bytes -> up to 4 UTF-8 bytes, so input length is safe)
+        final byte[] buf = new byte[len];
+        int out = 0;
+
+        int i = start;
+        while (i < endExclusive) {
             final int b = inp[i] & 0xFF;
 
-            if (!allowUnescapedControlChars && b < 0x20 && b != '\\')
+            if (!allowUnescapedControlChars && b < 0x20)
                 throw error("Unescaped control character at byte " + i);
 
-            if (b != '\\') continue;
+            if (b != '\\') {
+                // Fast bulk copy: scan ahead to next backslash or end
+                int j = i + 1;
+                while (j < endExclusive) {
+                    final int c = inp[j] & 0xFF;
+                    if (!allowUnescapedControlChars && c < 0x20)
+                        throw error("Unescaped control character at byte " + j);
+                    if (c == '\\') break;
+                    j++;
+                }
+                // Bulk copy [i, j) -> System.arraycopy is a single JVM intrinsic
+                final int copyLen = j - i;
+                System.arraycopy(inp, i, buf, out, copyLen);
+                out += copyLen;
+                i = j;
+                continue;
+            }
 
-            // Flush clean segment — bulk copy via String constructor (single native call)
-            if (i > segStart) sb.append(new String(inp, segStart, i - segStart, StandardCharsets.UTF_8));
-
+            // Escape sequence
             if (++i >= endExclusive) break;
-            final byte esc = inp[i];
+            final byte esc = inp[i++];
 
             switch (esc) {
-                case '"'  -> sb.append('"');
+                case '"'  -> buf[out++] = '"';
                 case '\'' -> {
-                    if (allowSingleQuotes || allowBackslashEscapingAny) sb.append('\'');
-                    else throw error("Invalid escape \\' at byte " + i);
+                    if (allowSingleQuotes || allowBackslashEscapingAny) buf[out++] = '\'';
+                    else throw error("Invalid escape \\' at byte " + (i - 1));
                 }
-                case '\\' -> sb.append('\\');
-                case '/'  -> sb.append('/');
-                case 'b'  -> sb.append('\b');
-                case 'f'  -> sb.append('\f');
-                case 'n'  -> sb.append('\n');
-                case 'r'  -> sb.append('\r');
-                case 't'  -> sb.append('\t');
+                case '\\' -> buf[out++] = '\\';
+                case '/'  -> buf[out++] = '/';
+                case 'b'  -> buf[out++] = '\b';
+                case 'f'  -> buf[out++] = '\f';
+                case 'n'  -> buf[out++] = '\n';
+                case 'r'  -> buf[out++] = '\r';
+                case 't'  -> buf[out++] = '\t';
                 case 'u'  -> {
-                    if (i + 4 >= endExclusive) break;
-                    // HEX_VAL table: no branches, no method calls
-                    final int h1 = HEX_VAL[inp[i + 1] & 0xFF];
-                    final int h2 = HEX_VAL[inp[i + 2] & 0xFF];
-                    final int h3 = HEX_VAL[inp[i + 3] & 0xFF];
-                    final int h4 = HEX_VAL[inp[i + 4] & 0xFF];
-                    if ((h1 | h2 | h3 | h4) < 0) throw error("Invalid \\u escape at byte " + i);
-                    sb.append((char)((h1 << 12) | (h2 << 8) | (h3 << 4) | h4));
+                    if (i + 3 >= endExclusive) break; // truncated uXXXX, skip
+                    final int h1 = HEX_VAL[inp[i]     & 0xFF];
+                    final int h2 = HEX_VAL[inp[i + 1] & 0xFF];
+                    final int h3 = HEX_VAL[inp[i + 2] & 0xFF];
+                    final int h4 = HEX_VAL[inp[i + 3] & 0xFF];
+                    if ((h1 | h2 | h3 | h4) < 0) throw error("Invalid \\u escape at byte " + (i - 2));
                     i += 4;
+
+                    int cp = (h1 << 12) | (h2 << 8) | (h3 << 4) | h4;
+
+                    // Surrogate pair: \uD800–\uDBFF followed by \uDC00–\uDFFF
+                    if (cp >= 0xD800 && cp <= 0xDBFF && i + 5 < endExclusive
+                        && inp[i] == '\\' && inp[i + 1] == 'u') {
+                        final int l1 = HEX_VAL[inp[i + 2] & 0xFF];
+                        final int l2 = HEX_VAL[inp[i + 3] & 0xFF];
+                        final int l3 = HEX_VAL[inp[i + 4] & 0xFF];
+                        final int l4 = HEX_VAL[inp[i + 5] & 0xFF];
+                        if ((l1 | l2 | l3 | l4) >= 0) {
+                            final int low = (l1 << 12) | (l2 << 8) | (l3 << 4) | l4;
+                            if (low >= 0xDC00 && low <= 0xDFFF) {
+                                cp = 0x10000 + ((cp - 0xD800) << 10) + (low - 0xDC00);
+                                i += 6;
+                            }
+                        }
+                    }
+
+                    // Encode codepoint as UTF-8 directly into buf
+                    out = writeUtf8(cp, buf, out);
                 }
                 default -> {
-                    if (allowBackslashEscapingAny) sb.append((char) (esc & 0xFF));
-                    else throw error("Invalid escape \\" + (char) esc + " at byte " + i);
+                    if (allowBackslashEscapingAny) buf[out++] = esc;
+                    else throw error("Invalid escape \\" + (char) esc + " at byte " + (i - 1));
                 }
             }
-            segStart = i + 1;
         }
 
-        if (segStart < endExclusive)
-            sb.append(new String(inp, segStart, endExclusive - segStart, StandardCharsets.UTF_8));
-
-        return sb.toString();
+        return new String(buf, 0, out, StandardCharsets.UTF_8);
     }
 
-    // ============================================================
-    // String end finding
-    // ============================================================
+    /**
+     * Encodes a Unicode codepoint as UTF-8 bytes into buf starting at offset,
+     * returns new offset. No allocation, no branching beyond codepoint range checks.
+     */
+    private static int writeUtf8(int cp, byte[] buf, int off) {
+        if (cp < 0x80) {
+            buf[off++] = (byte) cp;
+        } else if (cp < 0x800) {
+            buf[off++] = (byte) (0xC0 | (cp >>> 6));
+            buf[off++] = (byte) (0x80 | (cp & 0x3F));
+        } else if (cp < 0x10000) {
+            buf[off++] = (byte) (0xE0 | (cp >>> 12));
+            buf[off++] = (byte) (0x80 | ((cp >>> 6) & 0x3F));
+            buf[off++] = (byte) (0x80 | (cp & 0x3F));
+        } else {
+            buf[off++] = (byte) (0xF0 | (cp >>> 18));
+            buf[off++] = (byte) (0x80 | ((cp >>> 12) & 0x3F));
+            buf[off++] = (byte) (0x80 | ((cp >>> 6) & 0x3F));
+            buf[off++] = (byte) (0x80 | (cp & 0x3F));
+        }
+        return off;
+    }
 
     private int findStringEnd(int startQuote) {
         final int from  = startQuote + 1;
@@ -548,10 +584,6 @@ public final class JsonCursor {
         }
         throw error("Unterminated string at byte " + startQuote);
     }
-
-    // ============================================================
-    // Value length
-    // ============================================================
 
     private int findValueLength(int start) {
         return skipValueEnd(start) - start;
@@ -620,10 +652,6 @@ public final class JsonCursor {
         }
         return lim;
     }
-
-    // ============================================================
-    // Number parsing
-    // ============================================================
 
     private int parseInt(final int start, final int len) {
         if (len == 0) return 0;
@@ -715,10 +743,6 @@ public final class JsonCursor {
         return neg ? -result : result;
     }
 
-    // ============================================================
-    // Helpers
-    // ============================================================
-
     /** Byte-by-byte match against a literal byte array — no String allocation. */
     private boolean matchBytes(int start, int len, byte[] literal) {
         if (len != literal.length) return false;
@@ -732,10 +756,6 @@ public final class JsonCursor {
     }
 
     private static int hex(byte b) { return HEX_VAL[b & 0xFF]; }
-
-    // ============================================================
-    // Structural helpers (unchanged logic, minor cleanup)
-    // ============================================================
 
     private int findMatchingBrace(int openPos) {
         int    depth      = 1;
