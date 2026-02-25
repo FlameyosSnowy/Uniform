@@ -166,7 +166,7 @@ Product p = adapter.readValue(bytes);
 
 // Write to String
 String json = adapter.writeValue(p);
-// → {"id":1,"name":"Widget","price":9.99,"available":true}
+// -> {"id":1,"name":"Widget","price":9.99,"available":true}
 ```
 
 ### 4. Collections
@@ -321,7 +321,7 @@ cd Uniform
 
 ```bash
 ./gradlew :json:jmh
-# Results → json/build/results/jmh/results.json
+# Results -> json/build/results/jmh/results.json
 
 # Pretty-print only
 ./gradlew :json:jmhPrettyPrint
