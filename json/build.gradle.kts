@@ -23,7 +23,7 @@ dependencies {
     implementation(project(":core"))
     implementation("com.github.FlameyosSnowy:TurboScanner:1.3.0")
 
-    jmhImplementation("com.fasterxml.jackson.core:jackson-databind:2.17.1")
+    jmhImplementation("tools.jackson.core:jackson-databind:3.0.3")
     jmhImplementation("com.google.code.gson:gson:2.11.0")
     jmhImplementation("org.simdjson:simdjson-java:0.3.0")
 

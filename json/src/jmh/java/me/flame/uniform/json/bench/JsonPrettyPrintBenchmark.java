@@ -1,13 +1,14 @@
 package me.flame.uniform.json.bench;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.Strictness;
 import me.flame.uniform.json.JsonConfig;
 import me.flame.uniform.json.writers.prettifiers.JsonFormatter;
 import org.openjdk.jmh.annotations.*;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.SerializationFeature;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
@@ -33,8 +34,7 @@ public class JsonPrettyPrintBenchmark {
     @Setup(Level.Trial)
     public void setup() {
         // Setup Jackson with pretty printing
-        jacksonPretty = new ObjectMapper();
-        jacksonPretty.enable(SerializationFeature.INDENT_OUTPUT);
+        jacksonPretty = JsonMapper.builder().enable(SerializationFeature.INDENT_OUTPUT).build();
 
         // Setup Gson with pretty printing
         gsonPretty = new GsonBuilder().setPrettyPrinting().setStrictness(Strictness.LENIENT).create();

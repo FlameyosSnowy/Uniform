@@ -1,6 +1,9 @@
 package me.flame.uniform.json.bench;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.json.JsonFactory;
+import tools.jackson.core.util.JsonRecyclerPools;
+import tools.jackson.databind.DeserializationFeature;
+import tools.jackson.databind.ObjectMapper;
 import com.google.gson.Gson;
 import me.flame.uniform.json.JsonAdapter;
 import me.flame.uniform.json.JsonConfig;
@@ -8,6 +11,7 @@ import me.flame.uniform.json.bench.fixtures.*;
 import org.openjdk.jmh.annotations.*;
 import org.simdjson.JsonValue;
 import org.simdjson.SimdJsonParser;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.util.EnumSet;
 import java.util.Iterator;
@@ -45,7 +49,13 @@ public class JacksonVsUniformReadWriteBenchmark {
 
     @Setup(Level.Trial)
     public void setup() throws Exception {
-        jackson  = new ObjectMapper();
+        JsonFactory factory = JsonFactory.builder()
+            .recyclerPool(JsonRecyclerPools.threadLocalPool())
+            .build();
+
+        jackson = JsonMapper.builder(factory)
+            .disable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
+            .build();
         gson     = new Gson();
         simdJson = new SimdJsonParser();
 
