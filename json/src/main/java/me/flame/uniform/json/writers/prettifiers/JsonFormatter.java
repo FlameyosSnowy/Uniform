@@ -87,6 +87,17 @@ public final class JsonFormatter {
         return format(ByteBuffer.wrap(buffer));
     }
 
+    public String formatToString(String buffer) {
+        ByteBuffer formatted = format(ByteBuffer.wrap(buffer.getBytes(StandardCharsets.UTF_8)));
+        byte[] outputBytes = new byte[formatted.remaining()];
+        formatted.get(outputBytes);
+        return new String(outputBytes, StandardCharsets.UTF_8);
+    }
+
+    public ByteBuffer format(String buffer) {
+        return format(ByteBuffer.wrap(buffer.getBytes(StandardCharsets.UTF_8)));
+    }
+
     /**
      * Converts a byte offset into a (line, column) pair and builds a JsonException.
      * {@code offset == -1} means no position is available.
