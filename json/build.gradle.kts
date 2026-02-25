@@ -25,6 +25,7 @@ dependencies {
 
     jmhImplementation("com.fasterxml.jackson.core:jackson-databind:2.17.1")
     jmhImplementation("com.google.code.gson:gson:2.11.0")
+    jmhImplementation("org.simdjson:simdjson-java:0.3.0")
 
     testAnnotationProcessor(project(":annotation-processor"))
     jmhAnnotationProcessor(project(":annotation-processor"))
