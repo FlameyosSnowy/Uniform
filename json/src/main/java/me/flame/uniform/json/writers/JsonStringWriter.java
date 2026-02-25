@@ -1,38 +1,70 @@
 package me.flame.uniform.json.writers;
 
+import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
+
 public final class JsonStringWriter {
-    private final StringBuilder out;
-    private boolean needComma = false;
+    private byte[] buf;
+    private int pos;
 
     private byte[] ctxStack = new byte[8];
     private int depth = 0;
+    private boolean needComma = false;
 
     private static final byte CTX_OBJECT = 1;
     private static final byte CTX_ARRAY  = 2;
 
-    // Lookup table: true = needs escaping
     private static final boolean[] NEEDS_ESCAPE = new boolean[128];
     static {
         NEEDS_ESCAPE['"']  = true;
         NEEDS_ESCAPE['\\'] = true;
-        for (int i = 0; i < 0x20; i++) NEEDS_ESCAPE[i] = true; // control chars
+        for (int i = 0; i < 0x20; i++) NEEDS_ESCAPE[i] = true;
     }
 
+    private static final byte[] HEX    = "0123456789abcdef".getBytes(StandardCharsets.UTF_8);
+    private static final byte[] NULL   = "null".getBytes(StandardCharsets.UTF_8);
+    private static final byte[] TRUE   = "true".getBytes(StandardCharsets.UTF_8);
+    private static final byte[] FALSE  = "false".getBytes(StandardCharsets.UTF_8);
+    private static final byte[] ESC_QUOTE     = "\\\"".getBytes(StandardCharsets.UTF_8);
+    private static final byte[] ESC_BACKSLASH = "\\\\".getBytes(StandardCharsets.UTF_8);
+    private static final byte[] ESC_NEWLINE   = "\\n".getBytes(StandardCharsets.UTF_8);
+    private static final byte[] ESC_CR        = "\\r".getBytes(StandardCharsets.UTF_8);
+    private static final byte[] ESC_TAB       = "\\t".getBytes(StandardCharsets.UTF_8);
+    private static final byte[] ESC_UNICODE   = "\\u00".getBytes(StandardCharsets.UTF_8);
+
     public JsonStringWriter() {
-        this.out = new StringBuilder(128);
+        this.buf = new byte[128];
     }
 
     public JsonStringWriter(int capacity) {
-        this.out = new StringBuilder(capacity);
+        this.buf = new byte[capacity];
     }
 
-    // ── context stack ────────────────────────────────────────────────────────
+    private void ensure(int extra) {
+        if (pos + extra > buf.length)
+            buf = Arrays.copyOf(buf, Math.max(buf.length * 2, pos + extra));
+    }
+
+    private void write(byte b) {
+        ensure(1);
+        buf[pos++] = b;
+    }
+
+    private void write(byte[] bytes) {
+        write(bytes, 0, bytes.length);
+    }
+
+    private void write(byte[] bytes, int off, int len) {
+        ensure(len);
+        System.arraycopy(bytes, off, buf, pos, len);
+        pos += len;
+    }
 
     private void push(byte ctx) {
         if (depth == ctxStack.length) {
-            byte[] nctx = new byte[ctxStack.length * 2];
-            System.arraycopy(ctxStack, 0, nctx, 0, ctxStack.length);
-            ctxStack = nctx;
+            byte[] grown = new byte[ctxStack.length * 2];
+            System.arraycopy(ctxStack, 0, grown, 0, ctxStack.length);
+            ctxStack = grown;
         }
         ctxStack[depth++] = ctx;
         needComma = false;
@@ -40,14 +72,13 @@ public final class JsonStringWriter {
 
     private void pop(byte expected) {
         if (depth == 0) return;
-        depth--;
-        needComma = true;
-        if (ctxStack[depth] != expected)
+        if (ctxStack[--depth] != expected)
             throw new IllegalStateException("Mismatched JSON container close");
+        needComma = true;
     }
 
     private void commaIfNeeded() {
-        if (needComma) out.append(',');
+        if (needComma) write((byte) ',');
     }
 
     private void requireArrayContext() {
@@ -55,10 +86,8 @@ public final class JsonStringWriter {
             throw new IllegalStateException("Not in array context");
     }
 
-    // ── structural ───────────────────────────────────────────────────────────
-
     public JsonStringWriter reset() {
-        out.setLength(0);
+        pos = 0;
         needComma = false;
         depth = 0;
         return this;
@@ -67,12 +96,12 @@ public final class JsonStringWriter {
     public JsonStringWriter beginObject() {
         if (depth > 0 && ctxStack[depth - 1] == CTX_ARRAY) commaIfNeeded();
         push(CTX_OBJECT);
-        out.append('{');
+        write((byte) '{');
         return this;
     }
 
     public JsonStringWriter endObject() {
-        out.append('}');
+        write((byte) '}');
         pop(CTX_OBJECT);
         return this;
     }
@@ -80,74 +109,73 @@ public final class JsonStringWriter {
     public JsonStringWriter beginArray() {
         if (depth > 0 && ctxStack[depth - 1] == CTX_ARRAY) commaIfNeeded();
         push(CTX_ARRAY);
-        out.append('[');
+        write((byte) '[');
         return this;
     }
 
     public JsonStringWriter endArray() {
-        out.append(']');
+        write((byte) ']');
         pop(CTX_ARRAY);
         return this;
     }
 
-    // ── field names ──────────────────────────────────────────────────────────
-
-    /** Use when field name may contain characters needing escaping. */
     public JsonStringWriter name(String name) {
         commaIfNeeded();
         writeString(name);
-        out.append(':');
+        write((byte) ':');
         needComma = false;
         return this;
     }
 
-    /** Use when field name is a compile-time ASCII literal (no escaping needed). */
     public JsonStringWriter nameAscii(String name) {
         commaIfNeeded();
-        out.append('"').append(name).append('"').append(':');
+        write((byte) '"');
+        writeAscii(name);
+        write((byte) '"');
+        write((byte) ':');
         needComma = false;
         return this;
     }
 
     public JsonStringWriter nullValue() {
-        out.append("null");
+        write(NULL);
         needComma = true;
         return this;
     }
 
     public JsonStringWriter value(boolean v) {
-        out.append(v ? "true" : "false");
+        write(v ? TRUE : FALSE);
         needComma = true;
         return this;
     }
 
     public JsonStringWriter value(int v) {
-        out.append(v);
+        writeAscii(Integer.toString(v));
         needComma = true;
         return this;
     }
 
     public JsonStringWriter value(long v) {
-        out.append(v);
+        writeAscii(Long.toString(v));
         needComma = true;
         return this;
     }
 
     public JsonStringWriter value(double v) {
-        out.append(v);
+        writeAscii(Double.toString(v));
         needComma = true;
         return this;
     }
 
     public JsonStringWriter value(float v) {
-        out.append(v);
+        writeAscii(Float.toString(v));
         needComma = true;
         return this;
     }
 
     public JsonStringWriter value(Number v) {
         if (v == null) return nullValue();
-        out.append(v);
+        writeAscii(v.toString());
         needComma = true;
         return this;
     }
@@ -159,12 +187,10 @@ public final class JsonStringWriter {
         return this;
     }
 
-    // ── array values ─────────────────────────────────────────────────────────
-
     public JsonStringWriter arrayNullValue() {
         requireArrayContext();
         commaIfNeeded();
-        out.append("null");
+        write(NULL);
         needComma = true;
         return this;
     }
@@ -172,7 +198,7 @@ public final class JsonStringWriter {
     public JsonStringWriter arrayValue(boolean v) {
         requireArrayContext();
         commaIfNeeded();
-        out.append(v ? "true" : "false");
+        write(v ? TRUE : FALSE);
         needComma = true;
         return this;
     }
@@ -180,7 +206,7 @@ public final class JsonStringWriter {
     public JsonStringWriter arrayValue(int v) {
         requireArrayContext();
         commaIfNeeded();
-        out.append(v);
+        writeAscii(Integer.toString(v));
         needComma = true;
         return this;
     }
@@ -188,7 +214,7 @@ public final class JsonStringWriter {
     public JsonStringWriter arrayValue(long v) {
         requireArrayContext();
         commaIfNeeded();
-        out.append(v);
+        writeAscii(Long.toString(v));
         needComma = true;
         return this;
     }
@@ -196,7 +222,7 @@ public final class JsonStringWriter {
     public JsonStringWriter arrayValue(double v) {
         requireArrayContext();
         commaIfNeeded();
-        out.append(v);
+        writeAscii(Double.toString(v));
         needComma = true;
         return this;
     }
@@ -204,7 +230,7 @@ public final class JsonStringWriter {
     public JsonStringWriter arrayValue(float v) {
         requireArrayContext();
         commaIfNeeded();
-        out.append(v);
+        writeAscii(Float.toString(v));
         needComma = true;
         return this;
     }
@@ -213,7 +239,7 @@ public final class JsonStringWriter {
         if (v == null) return arrayNullValue();
         requireArrayContext();
         commaIfNeeded();
-        out.append(v);
+        writeAscii(v.toString());
         needComma = true;
         return this;
     }
@@ -227,42 +253,82 @@ public final class JsonStringWriter {
         return this;
     }
 
-    // ── finish ───────────────────────────────────────────────────────────────
-
     public String finish() {
-        return out.toString();
+        return new String(buf, 0, pos, StandardCharsets.UTF_8);
     }
 
-    // ── string escaping ──────────────────────────────────────────────────────
+    public byte[] finishAsBytes() {
+        return Arrays.copyOf(buf, pos);
+    }
 
     private void writeString(String s) {
         final int len = s.length();
-        out.append('"');
+        // Worst case: every char becomes uXXXX (6 bytes) + 2 quotes
+        ensure(len * 6 + 2);
+        buf[pos++] = '"';
 
-        // Fast path: scan for any char needing escaping
         int safe = 0;
         for (int i = 0; i < len; i++) {
             char c = s.charAt(i);
-            boolean needsEscape = c < 128 && NEEDS_ESCAPE[c];
-            if (needsEscape) {
-                // Flush safe prefix in one shot
-                if (i > safe) out.append(s, safe, i);
-                switch (c) {
-                    case '"'  -> out.append("\\\"");
-                    case '\\' -> out.append("\\\\");
-                    case '\n' -> out.append("\\n");
-                    case '\r' -> out.append("\\r");
-                    case '\t' -> out.append("\\t");
-                    default   -> out.append("\\u00").append(HEX[(c >> 4) & 0xF]).append(HEX[c & 0xF]);
-                }
-                safe = i + 1;
+            if (c >= 128 || !NEEDS_ESCAPE[c]) continue;
+
+            // Flush safe ASCII prefix as UTF-8
+            if (i > safe) {
+                writeUtf8(s, safe, i);
             }
+
+            switch (c) {
+                case '"'  -> write(ESC_QUOTE);
+                case '\\' -> write(ESC_BACKSLASH);
+                case '\n' -> write(ESC_NEWLINE);
+                case '\r' -> write(ESC_CR);
+                case '\t' -> write(ESC_TAB);
+                default   -> {
+                    write(ESC_UNICODE);
+                    write(HEX[(c >> 4) & 0xF]);
+                    write(HEX[c & 0xF]);
+                }
+            }
+            safe = i + 1;
         }
 
-        // Flush remaining safe tail (or entire string if no escaping needed)
-        if (safe < len) out.append(s, safe, len);
-        out.append('"');
+        if (safe < len) {
+            writeUtf8(s, safe, len);
+        }
+
+        buf[pos++] = '"';
     }
 
-    private static final char[] HEX = "0123456789abcdef".toCharArray();
+    private void writeAscii(String s) {
+        final int len = s.length();
+        ensure(len);
+        for (int i = 0; i < len; i++)
+            buf[pos++] = (byte) s.charAt(i);
+    }
+
+    private void writeUtf8(String s, int start, int end) {
+        for (int i = start; i < end; i++) {
+            char c = s.charAt(i);
+            if (c < 0x80) {
+                buf[pos++] = (byte) c;
+            } else if (c < 0x800) {
+                ensure(2);
+                buf[pos++] = (byte) (0xC0 | (c >> 6));
+                buf[pos++] = (byte) (0x80 | (c & 0x3F));
+            } else if (c < 0xD800 || c > 0xDFFF) {
+                ensure(3);
+                buf[pos++] = (byte) (0xE0 | (c >> 12));
+                buf[pos++] = (byte) (0x80 | ((c >> 6) & 0x3F));
+                buf[pos++] = (byte) (0x80 | (c & 0x3F));
+            } else {
+                // Surrogate pair → 4-byte UTF-8
+                ensure(4);
+                int cp = Character.toCodePoint(c, s.charAt(++i));
+                buf[pos++] = (byte) (0xF0 | (cp >> 18));
+                buf[pos++] = (byte) (0x80 | ((cp >> 12) & 0x3F));
+                buf[pos++] = (byte) (0x80 | ((cp >> 6) & 0x3F));
+                buf[pos++] = (byte) (0x80 | (cp & 0x3F));
+            }
+        }
+    }
 }

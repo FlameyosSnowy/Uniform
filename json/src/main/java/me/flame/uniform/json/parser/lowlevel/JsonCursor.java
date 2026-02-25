@@ -77,6 +77,9 @@ public final class JsonCursor {
     private static final byte[] BYTES_INF      = {'I', 'n', 'f', 'i', 'n', 'i', 't', 'y'};
     private static final byte[] BYTES_NEG_INF  = {'-', 'I', 'n', 'f', 'i', 'n', 'i', 't', 'y'};
 
+    // Thread-local buffer for string decoding to avoid repeated allocations
+    private static final ThreadLocal<byte[]> DECODE_BUFFER = ThreadLocal.withInitial(() -> new byte[1024]);
+
     // ============================================================
     // Instance state
     // ============================================================
@@ -92,10 +95,6 @@ public final class JsonCursor {
     private int fieldValueLen;
     private int elementValueStart;
     private int elementValueLen;
-
-    // ============================================================
-    // Feature flags — unpacked booleans are cheaper than EnumSet.contains()
-    // ============================================================
 
     private final boolean allowJavaComments;
     private final boolean allowYamlComments;
@@ -114,10 +113,6 @@ public final class JsonCursor {
     // True when ANY non-whitespace extension is active — lets skipWhitespaceAndComments
     // short-circuit the comment branches entirely in the common case.
     private final boolean anyComments;
-
-    // ============================================================
-    // Constructors
-    // ============================================================
 
     public JsonCursor(byte[] input, ScanResult scan) {
         this(input, scan, null);
@@ -179,10 +174,6 @@ public final class JsonCursor {
         this.wrapExceptions             = p.wrapExceptions;
         this.anyComments                = p.anyComments;
     }
-
-    // ============================================================
-    // Public API: Object traversal
-    // ============================================================
 
     public boolean enterObject() {
         skipWs();
@@ -253,10 +244,6 @@ public final class JsonCursor {
         return true;
     }
 
-    // ============================================================
-    // Accessors
-    // ============================================================
-
     @Contract(" -> new")
     public @NotNull ByteSlice fieldName() {
         return new ByteSlice(input, fieldNameStart, fieldNameLen);
@@ -293,8 +280,6 @@ public final class JsonCursor {
         return true;
     }
 
-    // ── Typed value accessors ────────────────────────────────────────────────
-
     public int     fieldValueAsInt()    { return parseInt(fieldValueStart, fieldValueLen); }
     public long    fieldValueAsLong()   { return parseLong(fieldValueStart, fieldValueLen); }
     public double  fieldValueAsDouble() { return parseDouble(fieldValueStart, fieldValueLen); }
@@ -308,7 +293,21 @@ public final class JsonCursor {
         final int    len = fieldValueLen;
         if (len == 4 && inp[s]=='t' && inp[s+1]=='r' && inp[s+2]=='u' && inp[s+3]=='e') return true;
         if (len == 5 && inp[s]=='f' && inp[s+1]=='a' && inp[s+2]=='l' && inp[s+3]=='s' && inp[s+4]=='e') return false;
-        // Rare: delegate rather than allocate eagerly
+        
+        // Optimized byte-by-byte comparison for case-insensitive boolean values
+        if (len == 4) {
+            byte b0 = inp[s], b1 = inp[s+1], b2 = inp[s+2], b3 = inp[s+3];
+            if ((b0 == 't' || b0 == 'T') && (b1 == 'r' || b1 == 'R') && 
+                (b2 == 'u' || b2 == 'U') && (b3 == 'e' || b3 == 'E')) return true;
+        }
+        if (len == 5) {
+            byte b0 = inp[s], b1 = inp[s+1], b2 = inp[s+2], b3 = inp[s+3], b4 = inp[s+4];
+            if ((b0 == 'f' || b0 == 'F') && (b1 == 'a' || b1 == 'A') && 
+                (b2 == 'l' || b2 == 'L') && (b3 == 's' || b3 == 'S') && 
+                (b4 == 'e' || b4 == 'E')) return false;
+        }
+        
+        // Fallback to String only if absolutely necessary
         return "true".equalsIgnoreCase(new String(inp, s, len, StandardCharsets.UTF_8));
     }
 
@@ -331,9 +330,11 @@ public final class JsonCursor {
 
     public boolean nextElement() {
         skipWs();
+        int limit = this.limit;
         if (pos >= limit) return false;
 
         byte b = input[pos];
+
         if (b == ']') { pos++; return false; }
 
         if (allowTrailingComma && b == ',') {
@@ -397,6 +398,8 @@ public final class JsonCursor {
         final byte[] inp = input;
         final int    lim = limit;
         boolean again = true;
+        boolean allowJavaComments = this.allowJavaComments;
+        boolean allowYamlComments = this.allowYamlComments;
         while (again) {
             again = false;
             // Consume trailing whitespace after a comment
@@ -426,6 +429,7 @@ public final class JsonCursor {
     private @NotNull String decodeJsonString(int start, int len) {
         final byte[] inp = input;
         final int    end = start + len;
+        boolean allowUnescapedControlChars = this.allowUnescapedControlChars;
 
         for (int i = start; i < end; i++) {
             final int b = inp[i] & 0xFF;
@@ -440,9 +444,12 @@ public final class JsonCursor {
         final byte[] inp = input;
         final int    len = endExclusive - start;
 
-        // Output buffer, worst case is same length as input (no escapes expand beyond input size
-        // except uXXXX which is 6 input bytes -> up to 4 UTF-8 bytes, so input length is safe)
-        final byte[] buf = new byte[len];
+        // Try thread-local buffer first, expand if needed
+        byte[] buf = DECODE_BUFFER.get();
+        if (buf.length < len) {
+            buf = new byte[Math.max(len, buf.length * 2)];
+            DECODE_BUFFER.set(buf);
+        }
         int out = 0;
 
         int i = start;
@@ -514,6 +521,14 @@ public final class JsonCursor {
                         }
                     }
 
+                    // Ensure buffer has space for UTF-8 expansion
+                    if (out + 4 > buf.length) {
+                        byte[] newBuf = new byte[buf.length * 2];
+                        System.arraycopy(buf, 0, newBuf, 0, out);
+                        buf = newBuf;
+                        DECODE_BUFFER.set(buf);
+                    }
+                    
                     // Encode codepoint as UTF-8 directly into buf
                     out = writeUtf8(cp, buf, out);
                 }
@@ -732,15 +747,47 @@ public final class JsonCursor {
         if (i < end && inp[i] == '.') {
             i++;
             double frac = 0, div = 1;
-            while (i < end && inp[i] >= '0' && inp[i] <= '9') { frac = frac * 10 + (inp[i++] - '0'); div *= 10; }
+            while (i < end && inp[i] >= '0' && inp[i] <= '9') { 
+                frac = frac * 10 + (inp[i++] - '0'); 
+                div *= 10; 
+            }
             result += frac / div;
         }
 
-        // Exponent: hand off to JDK (no allocation-free alternative for full accuracy)
-        if (i < end && (inp[i] == 'e' || inp[i] == 'E'))
-            return Double.parseDouble(new String(inp, start, len, StandardCharsets.UTF_8));
+        // Optimized exponent parsing without String allocation
+        if (i < end && (inp[i] == 'e' || inp[i] == 'E')) {
+            i++;
+            boolean expNeg = false;
+            if (i < end && inp[i] == '-') { expNeg = true; i++; }
+            else if (i < end && inp[i] == '+') i++;
+            
+            int expVal = 0;
+            while (i < end && inp[i] >= '0' && inp[i] <= '9') {
+                expVal = expVal * 10 + (inp[i++] - '0');
+            }
+            
+            if (expNeg) expVal = -expVal;
+            
+            // Apply exponent using pow10 lookup table for common cases
+            if (expVal >= -10 && expVal <= 10) {
+                result *= pow10(expVal);
+            } else {
+                // Fallback to String for very large exponents
+                return Double.parseDouble(new String(inp, start, len, StandardCharsets.UTF_8));
+            }
+        }
 
         return neg ? -result : result;
+    }
+    
+    // Precomputed powers of 10 for common exponent ranges
+    private static final double[] POW10 = {
+        1e-10, 1e-9, 1e-8, 1e-7, 1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1,
+        1e0, 1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9, 1e10
+    };
+    
+    private static double pow10(int exp) {
+        return POW10[exp + 10]; // exp ranges from -10 to 10
     }
 
     /** Byte-by-byte match against a literal byte array — no String allocation. */
