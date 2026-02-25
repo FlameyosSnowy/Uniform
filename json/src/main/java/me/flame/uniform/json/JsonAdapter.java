@@ -13,39 +13,35 @@ import org.jetbrains.annotations.NotNull;
 
 import java.nio.charset.StandardCharsets;
 
-public class JsonAdapter<T> {
-    private final Class<T> elementType;
+public class JsonAdapter {
     private final JsonConfig config;
-    private final JsonMapper<T> relatedMapper;
-    private final JsonWriterMapper<T> relatedWriterMapper;
 
-    @SuppressWarnings("unchecked")
-    public JsonAdapter(Class<T> elementType, JsonConfig config) {
-        this.elementType = elementType;
+    public JsonAdapter(JsonConfig config) {
         this.config = config;
-
         JsonMapperRegistry.applyConfig(config);
-
-        this.relatedMapper = (JsonMapper<T>) JsonMapperRegistry.getReader(elementType);
-        this.relatedWriterMapper = (JsonWriterMapper<T>) JsonMapperRegistry.getWriter(elementType);
     }
 
-    public static <T> JsonConfigBuilder builder(Class<T> ignored) {
+    public static JsonConfigBuilder builder() {
         return new JsonConfigBuilder();
     }
 
-    public T readValue(@NotNull String json) {
+    @SuppressWarnings("unchecked")
+    public <T> T readValue(@NotNull String json, Class<T> type) {
         byte[] bytes = json.getBytes(StandardCharsets.UTF_8);
-        return readValue(bytes);
+        return readValue(bytes, type);
     }
 
-    public T readValue(byte[] bytes) {
+    @SuppressWarnings("unchecked")
+    public <T> T readValue(byte[] bytes, Class<T> type) {
+        JsonMapper<T> mapper = (JsonMapper<T>) JsonMapperRegistry.getReader(type);
         JsonCursor cursor = JsonCursors.create(bytes);
-        return this.relatedMapper.map(cursor);
+        return mapper.map(cursor);
     }
 
-    public @NotNull String writeValue(@NotNull T value) {
-        return this.relatedWriterMapper.write(value);
+    @SuppressWarnings("unchecked")
+    public <T> @NotNull String writeValue(@NotNull T value) {
+        JsonWriterMapper<T> writerMapper = (JsonWriterMapper<T>) JsonMapperRegistry.getWriter(value.getClass());
+        return writerMapper.write(value);
     }
 
     public JsonWriter createWriter(JsonWriterOptions... options) {

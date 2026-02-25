@@ -4,8 +4,8 @@ import me.flame.uniform.core.resolvers.ResolverRegistry;
 import me.flame.uniform.json.JsonAdapter;
 import me.flame.uniform.json.JsonConfig;
 import me.flame.uniform.json.codegen.fixtures.*;
-import me.flame.uniform.json.writers.prettifiers.DefaultPrettifyEngine;
 import me.flame.uniform.json.writers.prettifiers.JsonFormatter;
+
 import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
@@ -24,8 +24,8 @@ public class JsonCodegenSmokeTest {
 
     @Test
     void pojo_read_and_write() {
-        JsonAdapter<SimplePojo> adapter = new JsonAdapter<>(SimplePojo.class, config());
-        SimplePojo pojo = adapter.readValue("{\"id\":1,\"name\":\"a\"}");
+        JsonAdapter adapter = new JsonAdapter(config());
+        SimplePojo pojo = adapter.readValue("{\"id\":1,\"name\":\"a\"}", SimplePojo.class);
         assertNotNull(pojo);
         assertEquals(1, pojo.id);
         assertEquals("a", pojo.name);
@@ -61,8 +61,8 @@ public class JsonCodegenSmokeTest {
 
     @Test
     void record_read_and_write() {
-        JsonAdapter<SimpleRecord> adapter = new JsonAdapter<>(SimpleRecord.class, config());
-        SimpleRecord rec = adapter.readValue("{\"id\":5,\"name\":\"z\"}");
+        JsonAdapter adapter = new JsonAdapter(config());
+        SimpleRecord rec = adapter.readValue("{\"id\":5,\"name\":\"z\"}", SimpleRecord.class);
         assertEquals(5, rec.id());
         assertEquals("z", rec.name());
 
@@ -73,8 +73,8 @@ public class JsonCodegenSmokeTest {
 
     @Test
     void nested_pojo_is_codegen_discovered_and_mapped() {
-        JsonAdapter<NestedPojo> adapter = new JsonAdapter<>(NestedPojo.class, config());
-        NestedPojo nested = adapter.readValue("{\"child\":{\"id\":3,\"name\":\"c\"}}");
+        JsonAdapter adapter = new JsonAdapter(config());
+        NestedPojo nested = adapter.readValue("{\"child\":{\"id\":3,\"name\":\"c\"}}", NestedPojo.class);
         assertNotNull(nested);
         assertNotNull(nested.child);
         assertEquals(3, nested.child.id);
@@ -86,8 +86,8 @@ public class JsonCodegenSmokeTest {
         // runtime supplier registration is still required at runtime for the generated dispatch code path
         ResolverRegistry.registerSupplier(Shape.class, new ShapeSupplier());
 
-        JsonAdapter<HasShape> adapter = new JsonAdapter<>(HasShape.class, config());
-        HasShape value = adapter.readValue("{\"shape\":{\"radius\":11}}");
+        JsonAdapter adapter = new JsonAdapter(config());
+        HasShape value = adapter.readValue("{\"shape\":{\"radius\":11}}", HasShape.class);
         assertNotNull(value);
         assertNotNull(value.shape);
         assertInstanceOf(Circle.class, value.shape);

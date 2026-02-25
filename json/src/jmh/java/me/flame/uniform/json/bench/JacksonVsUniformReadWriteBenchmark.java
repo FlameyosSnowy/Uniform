@@ -31,9 +31,7 @@ public class JacksonVsUniformReadWriteBenchmark {
     private Gson gson;
     private SimdJsonParser simdJson;
 
-    private JsonAdapter<SimpleBenchPojo>      uniformSimple;
-    private JsonAdapter<ComplexBenchPojo>     uniformComplex;
-    private JsonAdapter<SuperComplexBenchPojo> uniformSuperComplex;
+    private JsonAdapter uniform;
 
     private String simpleJson;
     private String complexJson;
@@ -63,9 +61,7 @@ public class JacksonVsUniformReadWriteBenchmark {
             EnumSet.noneOf(me.flame.uniform.json.features.JsonReadFeature.class),
             EnumSet.noneOf(me.flame.uniform.json.features.JsonWriteFeature.class));
 
-        uniformSimple       = new JsonAdapter<>(SimpleBenchPojo.class, cfg);
-        uniformComplex      = new JsonAdapter<>(ComplexBenchPojo.class, cfg);
-        uniformSuperComplex = new JsonAdapter<>(SuperComplexBenchPojo.class, cfg);
+        uniform = new JsonAdapter(cfg);
 
         simpleJson  = "{\"id\":1,\"name\":\"a\"}";
         complexJson = "{\"id\":1,\"name\":\"a\",\"child\":{\"id\":2,\"name\":\"b\"},\"count\":42}";
@@ -133,13 +129,13 @@ public class JacksonVsUniformReadWriteBenchmark {
 
     // ── Uniform ─────────────────────────────────────────────────────────────
 
-    @Benchmark public SimpleBenchPojo       uniform_read_simple()        { return uniformSimple.readValue(simpleJsonBytes); }
-    @Benchmark public ComplexBenchPojo      uniform_read_complex()       { return uniformComplex.readValue(complexJsonBytes); }
-    @Benchmark public SuperComplexBenchPojo uniform_read_super_complex() { return uniformSuperComplex.readValue(superComplexJsonBytes); }
+    @Benchmark public SimpleBenchPojo       uniform_read_simple()        { return uniform.readValue(simpleJsonBytes, SimpleBenchPojo.class); }
+    @Benchmark public ComplexBenchPojo      uniform_read_complex()       { return uniform.readValue(complexJsonBytes, ComplexBenchPojo.class); }
+    @Benchmark public SuperComplexBenchPojo uniform_read_super_complex() { return uniform.readValue(superComplexJsonBytes, SuperComplexBenchPojo.class); }
 
-    @Benchmark public String uniform_write_simple()        { return uniformSimple.writeValue(simpleObj); }
-    @Benchmark public String uniform_write_complex()       { return uniformComplex.writeValue(complexObj); }
-    @Benchmark public String uniform_write_super_complex() { return uniformSuperComplex.writeValue(superComplexObj); }
+    @Benchmark public String uniform_write_simple()        { return uniform.writeValue(simpleObj); }
+    @Benchmark public String uniform_write_complex()       { return uniform.writeValue(complexObj); }
+    @Benchmark public String uniform_write_super_complex() { return uniform.writeValue(superComplexObj); }
 
     // ── Jackson ─────────────────────────────────────────────────────────────
 
