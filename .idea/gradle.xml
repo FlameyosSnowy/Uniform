@@ -12,7 +12,6 @@
             <option value="$PROJECT_DIR$/annotation-processor" />
             <option value="$PROJECT_DIR$/core" />
             <option value="$PROJECT_DIR$/json" />
-            <option value="$PROJECT_DIR$/json-annotation-processor" />
           </set>
         </option>
       </GradleProjectSettings>
