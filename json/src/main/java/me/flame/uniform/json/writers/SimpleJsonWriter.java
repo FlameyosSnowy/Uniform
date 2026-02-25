@@ -14,9 +14,6 @@ import java.util.concurrent.CompletableFuture;
 public class SimpleJsonWriter implements JsonWriter {
     @Override
     public CompletableFuture<Integer> write(ByteBuffer buffer, Path path) throws JsonException {
-        JsonValidator jsonValidator = new JsonValidator(path.toAbsolutePath());
-        jsonValidator.validate(buffer);
-
         try (WritableByteChannel channel = FileChannel.open(path, StandardOpenOption.WRITE)) {
             return CompletableFuture.completedFuture(channel.write(buffer));
         } catch (IOException e) {
