@@ -1,8 +1,10 @@
 package me.flame.uniform.processor;
 
 import com.google.auto.service.AutoService;
+import com.palantir.javapoet.AnnotationSpec;
 import com.palantir.javapoet.ClassName;
 import com.palantir.javapoet.CodeBlock;
+import com.palantir.javapoet.FieldSpec;
 import com.palantir.javapoet.JavaFile;
 import com.palantir.javapoet.MethodSpec;
 import com.palantir.javapoet.ParameterizedTypeName;
@@ -19,6 +21,7 @@ import me.flame.uniform.core.annotations.SerializedObject;
 
 import javax.annotation.processing.AbstractProcessor;
 import javax.annotation.processing.FilerException;
+import javax.annotation.processing.Generated;
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.annotation.processing.Processor;
 import javax.annotation.processing.RoundEnvironment;
@@ -484,10 +487,8 @@ public final class UniformJsonProcessor extends AbstractProcessor {
                     );
                 }
 
-                boolean anySetter = assignable.stream()
-                    .anyMatch(p -> p.accessKind() == AccessKind.SETTER);
-                boolean anyField = assignable.stream()
-                    .anyMatch(p -> p.accessKind() == AccessKind.FIELD);
+                boolean anySetter = assignable.stream().anyMatch(p -> p.accessKind() == AccessKind.SETTER);
+                boolean anyField = assignable.stream().anyMatch(p -> p.accessKind() == AccessKind.FIELD);
 
                 if (!anySetter && !anyField) {
                     processingEnv.getMessager().printMessage(
@@ -514,7 +515,7 @@ public final class UniformJsonProcessor extends AbstractProcessor {
         return cb.build();
     }
 
-    private void callConstructor(ClassName target, List<Property> props, CodeBlock.Builder cb) {
+    private static void callConstructor(ClassName target, List<Property> props, CodeBlock.Builder cb) {
         cb.add("return new $T(", target);
         for (int i = 0; i < props.size(); i++) {
             if (i > 0) cb.add(", ");
@@ -589,22 +590,18 @@ public final class UniformJsonProcessor extends AbstractProcessor {
             emitElementRead(cb, compType, jsonMapper, jsonMapperRegistry, "__tmpList");
             cb.endControlFlow();
 
-            if (compType.equals(TypeName.INT)) {
-                cb.addStatement("$L = __tmpList.stream().mapToInt(Integer::intValue).toArray()", var);
-            } else if (compType.equals(TypeName.LONG)) {
-                cb.addStatement("$L = __tmpList.stream().mapToLong(Long::longValue).toArray()", var);
-            } else if (compType.equals(TypeName.DOUBLE)) {
-                cb.addStatement("$L = __tmpList.stream().mapToDouble(Double::doubleValue).toArray()", var);
-            } else if (compType.isPrimitive()) {
-                cb.addStatement("$T[] $L__raw = new $T[__tmpList.size()]", compType.box(), var, compType.box());
-                cb.addStatement("for (int __i = 0; __i < __tmpList.size(); __i++) $L__raw[__i] = __tmpList.get(__i)", var);
+            if (compType.isPrimitive()) {
                 cb.addStatement("$T[] __prim = new $T[__tmpList.size()]", compType, compType);
                 cb.beginControlFlow("for (int __i = 0; __i < __tmpList.size(); __i++)");
-                cb.addStatement("__prim[__i] = $L__raw[__i]", var);
+                cb.addStatement("__prim[__i] = __tmpList.get(__i)");
                 cb.endControlFlow();
                 cb.addStatement("$L = __prim", var);
             } else {
-                cb.addStatement("$L = __tmpList.toArray(new $T[0])", var, compType.box());
+                cb.addStatement("$T[] __arr2 = new $T[__tmpList.size()]", compType, compType);
+                cb.beginControlFlow("for (int __i = 0; __i < __tmpList.size(); __i++)");
+                cb.addStatement("__arr2[__i] = __tmpList.get(__i)");
+                cb.endControlFlow();
+                cb.addStatement("$L = __arr2", var);
             }
             return;
         }
@@ -782,9 +779,12 @@ public final class UniformJsonProcessor extends AbstractProcessor {
 
     private void writeWriterToFile(ClassName target, ClassName writerName, ClassName jsonWriterMapper, ClassName jsonConfig, MethodSpec ctor, MethodSpec writeTo) throws IOException {
         TypeSpec writer = TypeSpec.classBuilder(writerName)
+            .addAnnotation(AnnotationSpec.builder(Generated.class)
+                .addMember("value", "\"me.flame.uniform.processor.UniformJsonProcessor\"")
+                .build())
             .addModifiers(Modifier.PUBLIC, Modifier.FINAL)
             .addSuperinterface(ParameterizedTypeName.get(jsonWriterMapper, target))
-            .addField(com.palantir.javapoet.FieldSpec.builder(jsonConfig, "__config", Modifier.PRIVATE, Modifier.STATIC, Modifier.VOLATILE)
+            .addField(FieldSpec.builder(jsonConfig, "__config", Modifier.PRIVATE, Modifier.STATIC, Modifier.VOLATILE)
                 .build())
             .addMethod(MethodSpec.methodBuilder("setConfig")
                 .addModifiers(Modifier.PUBLIC, Modifier.STATIC)
@@ -836,6 +836,9 @@ public final class UniformJsonProcessor extends AbstractProcessor {
             .build();
 
         TypeSpec module = TypeSpec.classBuilder(moduleName)
+            .addAnnotation(AnnotationSpec.builder(Generated.class)
+                .addMember("value", "\"me.flame.uniform.processor.UniformJsonProcessor\"")
+                .build())
             .addModifiers(Modifier.PUBLIC, Modifier.FINAL)
             .addSuperinterface(jsonMapperModule)
             .addMethod(register)
@@ -865,6 +868,9 @@ public final class UniformJsonProcessor extends AbstractProcessor {
         }
 
         TypeSpec aggregator = TypeSpec.classBuilder(aggregatorName)
+            .addAnnotation(AnnotationSpec.builder(Generated.class)
+                .addMember("value", "\"me.flame.uniform.processor.UniformJsonProcessor\"")
+                .build())
             .addModifiers(Modifier.PUBLIC, Modifier.FINAL)
             .addSuperinterface(moduleInterface)
             .addMethod(register.build())
