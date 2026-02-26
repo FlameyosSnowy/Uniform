@@ -629,31 +629,25 @@ public final class UniformJsonProcessor extends AbstractProcessor {
         cb.addStatement("$L = new $T(stripQuotes(cursor.fieldValue().toString()))", var, t);
     }
 
-    /**
-     * Emits the element-read code for List/Set/Queue inside a nextElement() loop.
-     * The result is added to {@code collVar} via .add().
-     */
     private void emitElementRead(com.palantir.javapoet.CodeBlock.Builder cb,
                                  TypeName elemType,
                                  ClassName jsonMapper,
                                  ClassName jsonMapperRegistry,
                                  String collVar) {
-        ClassName jsonCursor = ClassName.get("me.flame.uniform.json.parser.lowlevel", "JsonCursor");
-
-        if (elemType.equals(TypeName.INT)     || elemType.equals(TypeName.INT.box()))
-            cb.addStatement("$L.add(Integer.parseInt(__arr.elementValue().toString()))", collVar);
-        else if (elemType.equals(TypeName.LONG)    || elemType.equals(TypeName.LONG.box()))
-            cb.addStatement("$L.add(Long.parseLong(__arr.elementValue().toString()))", collVar);
-        else if (elemType.equals(TypeName.DOUBLE)  || elemType.equals(TypeName.DOUBLE.box()))
-            cb.addStatement("$L.add(Double.parseDouble(__arr.elementValue().toString()))", collVar);
-        else if (elemType.equals(TypeName.FLOAT)   || elemType.equals(TypeName.FLOAT.box()))
-            cb.addStatement("$L.add(Float.parseFloat(__arr.elementValue().toString()))", collVar);
-        else if (elemType.equals(TypeName.SHORT)   || elemType.equals(TypeName.SHORT.box()))
-            cb.addStatement("$L.add(Short.parseShort(__arr.elementValue().toString()))", collVar);
-        else if (elemType.equals(TypeName.BYTE)    || elemType.equals(TypeName.BYTE.box()))
-            cb.addStatement("$L.add(Byte.parseByte(__arr.elementValue().toString()))", collVar);
+        if (elemType.equals(TypeName.INT) || elemType.equals(TypeName.INT.box()))
+            cb.addStatement("$L.add(__arr.elementValueAsInt())", collVar);
+        else if (elemType.equals(TypeName.LONG) || elemType.equals(TypeName.LONG.box()))
+            cb.addStatement("$L.add(__arr.elementValueAsLong())", collVar);
+        else if (elemType.equals(TypeName.DOUBLE) || elemType.equals(TypeName.DOUBLE.box()))
+            cb.addStatement("$L.add(__arr.elementValueAsDouble())", collVar);
+        else if (elemType.equals(TypeName.FLOAT) || elemType.equals(TypeName.FLOAT.box()))
+            cb.addStatement("$L.add(__arr.elementValueAsFloat())", collVar);
+        else if (elemType.equals(TypeName.SHORT) || elemType.equals(TypeName.SHORT.box()))
+            cb.addStatement("$L.add(__arr.elementValueAsShort())", collVar);
+        else if (elemType.equals(TypeName.BYTE) || elemType.equals(TypeName.BYTE.box()))
+            cb.addStatement("$L.add(__arr.elementValueAsByte())", collVar);
         else if (elemType.equals(TypeName.BOOLEAN) || elemType.equals(TypeName.BOOLEAN.box()))
-            cb.addStatement("$L.add(Boolean.parseBoolean(__arr.elementValue().toString()))", collVar);
+            cb.addStatement("$L.add(__arr.elementValueAsBoolean())", collVar);
         else if (elemType.equals(ClassName.get(String.class)))
             cb.addStatement("$L.add(__arr.elementValueAsUnquotedString())", collVar);
         else if (elemType instanceof ClassName declared) {
