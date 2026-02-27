@@ -1,8 +1,8 @@
 package me.flame.uniform.json.mappers;
 
-import me.flame.uniform.json.parser.lowlevel.JsonCursor;
+import me.flame.uniform.json.parser.lowlevel.JsonReadCursor;
 
 @FunctionalInterface
 public interface JsonMapper<T> {
-    T map(JsonCursor cursor);
+    T map(JsonReadCursor cursor);
 }

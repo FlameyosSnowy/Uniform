@@ -396,7 +396,7 @@ public final class UniformJsonProcessor extends AbstractProcessor {
     }
 
     private void writeReader(TypeElement typeElement, ClassName target, ClassName readerName, List<Property> props) throws IOException {
-        ClassName jsonCursor      = ClassName.get("me.flame.uniform.json.parser.lowlevel", "JsonCursor");
+        ClassName jsonCursor      = ClassName.get("me.flame.uniform.json.parser.lowlevel", "JsonReadCursor");
         ClassName jsonMapper      = ClassName.get("me.flame.uniform.json.mappers", "JsonMapper");
         ClassName jsonConfig      = ClassName.get("me.flame.uniform.json", "JsonConfig");
 

@@ -21,7 +21,7 @@ import java.nio.charset.StandardCharsets;
  *
  * @version 2.0
  */
-public final class JsonCursor {
+public final class JsonCursor implements JsonReadCursor {
 
     // ============================================================
     // Static lookup tables
@@ -169,7 +169,7 @@ public final class JsonCursor {
     // ============================================================
     // Object / Array navigation
     // ============================================================
-
+    @Override
     public boolean enterObject() {
         skipWs();
         if (pos >= limit || input[pos] != '{') return false;
@@ -178,6 +178,7 @@ public final class JsonCursor {
         return true;
     }
 
+    @Override
     public boolean nextField() {
         skipWs();
         if (pos >= limit) return false;
@@ -237,6 +238,7 @@ public final class JsonCursor {
         return true;
     }
 
+    @Override
     public boolean enterArray() {
         skipWs();
         if (pos >= limit || input[pos] != '[') return false;
@@ -245,6 +247,7 @@ public final class JsonCursor {
         return true;
     }
 
+    @Override
     public boolean nextElement() {
         skipWs();
         final int limit = this.limit;
@@ -278,7 +281,7 @@ public final class JsonCursor {
     // ============================================================
     // Field name access
     // ============================================================
-
+    @Override
     @Contract(" -> new")
     public @NotNull ByteSlice fieldName() {
         return new ByteSlice(input, fieldNameStart, fieldNameLen);
@@ -288,10 +291,12 @@ public final class JsonCursor {
      * Returns the current field name as a String without allocating a ByteSlice.
      * Saves one heap allocation vs fieldName().toString() in codegen-heavy paths.
      */
+    @Override
     public @NotNull String  fieldNameAsString() {
         return new String(input, fieldNameStart, fieldNameLen, StandardCharsets.UTF_8);
     }
 
+    @Override
     public int fieldNameHash() {
         int h   = 0x811c9dc5;
         final byte[] inp = input;
@@ -303,6 +308,7 @@ public final class JsonCursor {
         return h;
     }
 
+    @Override
     public boolean fieldNameEquals(@NotNull String expected) {
         final int len = expected.length();
         if (len != fieldNameLen) return false;
@@ -321,17 +327,30 @@ public final class JsonCursor {
     // ============================================================
 
     @Contract(" -> new")
+    @Override
     public @NotNull ByteSlice fieldValue() {
         return new ByteSlice(input, fieldValueStart, fieldValueLen);
     }
 
+    @Override
     public int     fieldValueAsInt()    { return parseInt(fieldValueStart, fieldValueLen); }
+
+    @Override
     public long    fieldValueAsLong()   { return parseLong(fieldValueStart, fieldValueLen); }
+
+    @Override
     public double  fieldValueAsDouble() { return parseDouble(fieldValueStart, fieldValueLen); }
+
+    @Override
     public float   fieldValueAsFloat()  { return (float) parseDouble(fieldValueStart, fieldValueLen); }
+
+    @Override
     public short   fieldValueAsShort()  { return (short) parseInt(fieldValueStart, fieldValueLen); }
+
+    @Override
     public byte    fieldValueAsByte()   { return (byte)  parseInt(fieldValueStart, fieldValueLen); }
 
+    @Override
     public boolean fieldValueAsBoolean() {
         final byte[] inp = input;
         final int    s   = fieldValueStart;
@@ -349,6 +368,7 @@ public final class JsonCursor {
         return "true".equalsIgnoreCase(new String(inp, s, len, StandardCharsets.UTF_8));
     }
 
+    @Override
     public @NotNull String fieldValueAsUnquotedString() {
         final int s   = fieldValueStart;
         final int len = fieldValueLen;
@@ -358,6 +378,7 @@ public final class JsonCursor {
         return new String(input, s, len, StandardCharsets.UTF_8);
     }
 
+    @Override
     public @NotNull JsonCursor fieldValueCursor() {
         return new JsonCursor(input, scan, fieldValueStart, fieldValueStart + fieldValueLen, this);
     }
@@ -366,6 +387,7 @@ public final class JsonCursor {
     // Element value access — direct methods, zero ByteSlice allocation
     // ============================================================
 
+    @Override
     @Contract(" -> new")
     public @NotNull ByteSlice elementValue() {
         return new ByteSlice(input, elementValueStart, elementValueLen);
@@ -376,13 +398,25 @@ public final class JsonCursor {
      * and one intermediate String allocation compared to elementValue().toString().
      * These are the methods emitted by codegen for primitive array/collection elements.
      */
+    @Override
     public int     elementValueAsInt()     { return parseInt(elementValueStart, elementValueLen); }
+
+    @Override
     public long    elementValueAsLong()    { return parseLong(elementValueStart, elementValueLen); }
+
+    @Override
     public double  elementValueAsDouble()  { return parseDouble(elementValueStart, elementValueLen); }
+
+    @Override
     public float   elementValueAsFloat()   { return (float) parseDouble(elementValueStart, elementValueLen); }
+
+    @Override
     public short   elementValueAsShort()   { return (short) parseInt(elementValueStart, elementValueLen); }
+
+    @Override
     public byte    elementValueAsByte()    { return (byte)  parseInt(elementValueStart, elementValueLen); }
 
+    @Override
     public boolean elementValueAsBoolean() {
         final byte[] inp = input;
         final int    s   = elementValueStart;
@@ -392,6 +426,7 @@ public final class JsonCursor {
         return "true".equalsIgnoreCase(new String(inp, s, len, StandardCharsets.UTF_8));
     }
 
+    @Override
     public @NotNull String elementValueAsUnquotedString() {
         final int s   = elementValueStart;
         final int len = elementValueLen;
@@ -401,6 +436,7 @@ public final class JsonCursor {
         return new String(input, s, len, StandardCharsets.UTF_8);
     }
 
+    @Override
     public @NotNull JsonCursor elementValueCursor() {
         return new JsonCursor(input, scan, elementValueStart, elementValueStart + elementValueLen, this);
     }
@@ -457,7 +493,6 @@ public final class JsonCursor {
 
     /**
      * Fast path string decoder.
-     *
      * Uses SWAR (SIMD Within A Register) to scan 8 bytes at once for backslash
      * or control characters. For typical ASCII JSON strings with no escapes this
      * is ~8x faster than the previous byte-by-byte scan before falling through to
@@ -611,7 +646,6 @@ public final class JsonCursor {
     // ============================================================
     // String-finding internals
     // ============================================================
-
     private int findStringEnd(int startQuote) {
         final int from  = startQuote + 1;
         final long[] quotes = scan.getQuoteMask();
@@ -772,7 +806,6 @@ public final class JsonCursor {
 
     /**
      * Fast double parser with extended POW10 table covering ±22.
-     *
      * Eliminates String allocation for the vast majority of real-world doubles
      * (scientific notation up to e±22 is handled natively). Only values with
      * exponents outside ±22, or values requiring IEEE 754 round-trip precision
@@ -929,7 +962,6 @@ public final class JsonCursor {
     // ============================================================
     // SWAR helpers — operate on 8 bytes packed little-endian in a long
     // ============================================================
-
     /**
      * Reads 8 bytes from buf[off..off+7] as a little-endian long.
      * Caller must ensure off + 8 <= buf.length.
@@ -948,7 +980,6 @@ public final class JsonCursor {
     /**
      * Returns nonzero (with set high-bits at match positions) if any byte in {@code v}
      * equals the backslash character (0x5C).
-     *
      * Algorithm: XOR with broadcast(0x5C) turns matching bytes to 0x00,
      * then standard zero-byte detection finds them.
      */
@@ -961,7 +992,6 @@ public final class JsonCursor {
     /**
      * Returns nonzero (with set high-bits at match positions) if any byte in {@code v}
      * is strictly less than {@code n} (where 1 ≤ n ≤ 128).
-     *
      * Used to detect control characters (n=0x20).
      */
     private static long swarHasLessThan(long v, int n) {
