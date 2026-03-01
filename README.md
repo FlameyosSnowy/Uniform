@@ -142,16 +142,15 @@ public record Product(int id, String name, double price, boolean available) {}
 ### 2. Create an adapter
 
 ```java
-// Default config — strict JSON, no extra features
-JsonAdapter<Product> adapter = new JsonAdapter<>(Product.class, JsonConfig.defaults());
+// Default config - strict JSON, no extra features
+JsonAdapter<Product> adapter = new JsonAdapter<>(JsonConfig.defaults());
 
 // Or build a custom config
-JsonConfig config = JsonAdapter.builder(Product.class)
-    .allowComments()
-    .allowTrailingCommas()
+JsonConfig config = JsonAdapter.builder()
+    .addReadFeature(JsonReadFeature.ALLOW_JAVA_COMMENTS)
     .build();
 
-JsonAdapter<Product> adapter = new JsonAdapter<>(Product.class, config);
+JsonAdapter<Product> adapter = new JsonAdapter<>(config);
 ```
 
 ### 3. Read and write
@@ -162,7 +161,7 @@ Product p = adapter.readValue("{\"id\":1,\"name\":\"Widget\",\"price\":9.99,\"av
 
 // Read from byte[]
 byte[] bytes = Files.readAllBytes(Path.of("product.json"));
-Product p = adapter.readValue(bytes);
+Product p = adapter.readValue(bytes, Product.class);
 
 // Write to String
 String json = adapter.writeValue(p);
@@ -234,9 +233,6 @@ public class ShapeSupplier implements ContextDynamicTypeSupplier<Shape> {
         return Circle.class;
     }
 }
-
-// Register once at startup
-ResolverRegistry.registerSupplier(Shape.class, new ShapeSupplier());
 ```
 
 ### 9. Pretty printing

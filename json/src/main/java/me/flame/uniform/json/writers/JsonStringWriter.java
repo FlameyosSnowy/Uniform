@@ -3,7 +3,8 @@ package me.flame.uniform.json.writers;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 
-public final class JsonStringWriter {
+@SuppressWarnings({ "unused", "UnusedReturnValue" })
+public sealed class JsonStringWriter permits JsonDomBuilder {
     private byte[] buf;
     private int pos;
 

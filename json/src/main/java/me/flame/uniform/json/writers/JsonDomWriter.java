@@ -1,4 +1,4 @@
-package me.flame.uniform.json;
+package me.flame.uniform.json.writers;
 
 import me.flame.uniform.json.dom.JsonArray;
 import me.flame.uniform.json.dom.JsonBoolean;
@@ -13,7 +13,6 @@ import me.flame.uniform.json.dom.JsonObject;
 import me.flame.uniform.json.dom.JsonShort;
 import me.flame.uniform.json.dom.JsonString;
 import me.flame.uniform.json.dom.JsonValue;
-import me.flame.uniform.json.writers.JsonStringWriter;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayDeque;
@@ -34,22 +33,17 @@ import java.util.Objects;
  *
  * <h3>Work-item protocol</h3>
  * <ul>
- *   <li>{@link WriteValue}       - emit a scalar, or open a container and push its children</li>
- *   <li>{@link WriteObjectEntry} - emit {@code out.name(key)} then expand the value</li>
- *   <li>{@link CloseObject}      - emit {@code out.endObject()}</li>
- *   <li>{@link CloseArray}       - emit {@code out.endArray()}</li>
+ *   <li>{@link WriteValue}       — emit a scalar, or open a container and push its children</li>
+ *   <li>{@link WriteObjectEntry} — emit {@code out.name(key)} then expand the value</li>
+ *   <li>{@link CloseObject}      — emit {@code out.endObject()}</li>
+ *   <li>{@link CloseArray}       — emit {@code out.endArray()}</li>
  * </ul>
  *
  * Because the stack is LIFO, children of a container are pushed in <em>reverse</em>
  * order so they are processed in their original order when popped.
  */
-final class JsonDomWriter {
-
+public final class JsonDomWriter {
     private JsonDomWriter() {}
-
-    // -------------------------------------------------------------------------
-    // Work-item sealed hierarchy
-    // -------------------------------------------------------------------------
 
     private sealed interface Task permits WriteValue, WriteObjectEntry, CloseObject, CloseArray {}
 
@@ -58,23 +52,18 @@ final class JsonDomWriter {
     private record CloseObject()                           implements Task {}
     private record CloseArray()                            implements Task {}
 
-    // Singletons - no allocation on every close
     private static final CloseObject CLOSE_OBJECT = new CloseObject();
     private static final CloseArray  CLOSE_ARRAY  = new CloseArray();
-
-    // -------------------------------------------------------------------------
-    // Public API
-    // -------------------------------------------------------------------------
 
     /**
      * Serialises {@code value} and returns the resulting JSON string.
      *
-     * @param value  the DOM node to serialise - must not be {@code null}
+     * @param value  the DOM node to serialise — must not be {@code null}
      * @return a well-formed JSON string
      */
-    static @NotNull String write(@NotNull JsonValue value) {
+    public static @NotNull String write(@NotNull JsonValue value) {
         JsonStringWriter out   = new JsonStringWriter();
-        Deque<Task>      stack = new ArrayDeque<>(32);
+        Deque<Task>      stack = new ArrayDeque<>();
 
         stack.push(new WriteValue(value));
 
@@ -95,12 +84,6 @@ final class JsonDomWriter {
         return out.toString();
     }
 
-    // -------------------------------------------------------------------------
-    // Expand: either emit a scalar immediately, or open a container and
-    // schedule its children + close sentinel onto the stack.
-    // -------------------------------------------------------------------------
-
-    @SuppressWarnings("ObjectAllocationInLoop")
     private static void expand(JsonValue value, Deque<Task> stack, JsonStringWriter out) {
         if (Objects.requireNonNull(value) instanceof JsonNull) {
             out.nullValue();
@@ -112,8 +95,8 @@ final class JsonDomWriter {
             out.value(s.value());
         } else if (value instanceof JsonObject obj) {
             out.beginObject();
-            // Collect entries so we can push in reverse (LIFO -> original order).
-            // Use the map's entry set directly - no extra allocation beyond the list.
+            // Collect entries so we can push in reverse (LIFO → original order).
+            // Use the map's entry set directly — no extra allocation beyond the list.
             List<Map.Entry<String, JsonValue>> entries = new ArrayList<>(obj.size());
             for (Map.Entry<String, JsonValue> e : obj) entries.add(e);
 
@@ -131,10 +114,6 @@ final class JsonDomWriter {
             }
         }
     }
-
-    // -------------------------------------------------------------------------
-    // Numeric dispatch - picks the tightest overload to avoid precision loss
-    // -------------------------------------------------------------------------
 
     private static void writeNumber(JsonNumber n, JsonStringWriter out) {
         if (Objects.requireNonNull(n) instanceof JsonByte b) {

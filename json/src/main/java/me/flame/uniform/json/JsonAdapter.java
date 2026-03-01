@@ -9,6 +9,8 @@ import me.flame.uniform.json.mappers.JsonWriterMapper;
 import me.flame.uniform.json.parser.JsonCursors;
 import me.flame.uniform.json.parser.lowlevel.JsonCursor;
 import me.flame.uniform.json.parser.lowlevel.MapJsonCursor;
+import me.flame.uniform.json.writers.JsonDomBuilder;
+import me.flame.uniform.json.writers.JsonDomWriter;
 import me.flame.uniform.json.writers.JsonWriter;
 import me.flame.uniform.json.writers.JsonWriterFactory;
 import me.flame.uniform.json.writers.JsonWriterOptions;
@@ -23,7 +25,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ForkJoinPool;
 
-@SuppressWarnings("unchecked")
+@SuppressWarnings({ "unchecked", "unused", "MethodMayBeStatic" })
 public record JsonAdapter(JsonConfig config, Executor executor) {
     public JsonAdapter(JsonConfig config) {
         this(config, ForkJoinPool.commonPool());
@@ -143,6 +145,30 @@ public record JsonAdapter(JsonConfig config, Executor executor) {
     public @NotNull String writeValue(@NotNull JsonValue value) {
         return JsonDomWriter.write(value);
     }
+
+    /**
+     * Converts a POJO to a {@link JsonObject} DOM tree by driving the registered
+     * {@link me.flame.uniform.json.mappers.JsonWriterMapper} for {@code T} against
+     * a {@link JsonDomBuilder} instead of a string writer.
+     *
+     * @param entity the object to convert — must not be {@code null}
+     * @param <T>    the entity type; a {@code JsonWriterMapper<T>} must be registered
+     * @return the entity represented as a {@link JsonObject}
+     * @throws IllegalStateException if no writer is registered for the entity's type,
+     *                               or if the mapper produces a non-object root value
+     */
+    @SuppressWarnings("unchecked")
+    public <T> @NotNull JsonObject valueToTree(@NotNull T entity) {
+        JsonWriterMapper<T> writer = (JsonWriterMapper<T>) JsonMapperRegistry.getWriter(entity.getClass());
+        if (writer == null)
+            throw new IllegalStateException("No JsonWriterMapper registered for " + entity.getClass().getName()
+                + ". Ensure the class is annotated with @SerializedObject and was processed by the annotation processor.");
+
+        JsonDomBuilder builder = new JsonDomBuilder();
+        writer.writeTo(builder, entity);
+        return builder.result();
+    }
+
 
     /**
      * Asynchronously serializes {@code value} to a JSON string.
