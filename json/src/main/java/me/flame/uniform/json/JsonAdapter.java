@@ -1,10 +1,12 @@
 package me.flame.uniform.json;
 
+import me.flame.uniform.json.dom.JsonObject;
+import me.flame.uniform.json.dom.JsonValue;
 import me.flame.uniform.json.exceptions.JsonException;
 import me.flame.uniform.json.mappers.JsonMapper;
 import me.flame.uniform.json.mappers.JsonMapperRegistry;
 import me.flame.uniform.json.mappers.JsonWriterMapper;
-import me.flame.uniform.json.parser.lowlevel.JsonCursors;
+import me.flame.uniform.json.parser.JsonCursors;
 import me.flame.uniform.json.parser.lowlevel.JsonCursor;
 import me.flame.uniform.json.parser.lowlevel.MapJsonCursor;
 import me.flame.uniform.json.writers.JsonWriter;
@@ -48,16 +50,26 @@ public record JsonAdapter(JsonConfig config, Executor executor) {
         return readValue(bytes, type);
     }
 
+    public JsonObject readValue(@NotNull String json) {
+        byte[] bytes = json.getBytes(StandardCharsets.UTF_8);
+        return readValue(bytes);
+    }
+
+    public JsonObject readValue(byte[] bytes) {
+        JsonCursor cursor = JsonCursors.createNormal(bytes, config);
+        return cursor.parseValue();
+    }
+
     public <T> T readValue(byte[] bytes, Class<T> type) {
         JsonMapper<T> mapper = (JsonMapper<T>) JsonMapperRegistry.getReader(type);
-        JsonCursor cursor = JsonCursors.createNormal(bytes);
+        JsonCursor cursor = JsonCursors.createNormal(bytes, config);
         return mapper.map(cursor);
     }
 
     public <T> T readValue(InputStream inputStream, Class<T> type) {
         JsonMapper<T> mapper = (JsonMapper<T>) JsonMapperRegistry.getReader(type);
         try {
-            JsonCursor cursor = JsonCursors.createNormal(inputStream.readAllBytes());
+            JsonCursor cursor = JsonCursors.createNormal(inputStream.readAllBytes(), config);
             return mapper.map(cursor);
         } catch (IOException e) {
             throw JsonException.io(e);
@@ -125,6 +137,19 @@ public record JsonAdapter(JsonConfig config, Executor executor) {
      * <p>{@code value} must not be mutated while the future is pending.
      */
     public <T> CompletableFuture<String> writeValueAsync(@NotNull T value) {
+        return CompletableFuture.supplyAsync(() -> writeValue(value), executor);
+    }
+
+    public @NotNull String writeValue(@NotNull JsonValue value) {
+        return JsonDomWriter.write(value);
+    }
+
+    /**
+     * Asynchronously serializes {@code value} to a JSON string.
+     *
+     * <p>{@code value} must not be mutated while the future is pending.
+     */
+    public <T> CompletableFuture<String> writeValueAsync(@NotNull JsonValue value) {
         return CompletableFuture.supplyAsync(() -> writeValue(value), executor);
     }
 

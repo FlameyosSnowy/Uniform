@@ -2,8 +2,22 @@ package me.flame.uniform.json.parser.lowlevel;
 
 import me.flame.turboscanner.ScanResult;
 import me.flame.uniform.json.JsonConfig;
+import me.flame.uniform.json.dom.JsonArray;
+import me.flame.uniform.json.dom.JsonBoolean;
+import me.flame.uniform.json.dom.JsonByte;
+import me.flame.uniform.json.dom.JsonDouble;
+import me.flame.uniform.json.dom.JsonFloat;
+import me.flame.uniform.json.dom.JsonInteger;
+import me.flame.uniform.json.dom.JsonLong;
+import me.flame.uniform.json.dom.JsonNull;
+import me.flame.uniform.json.dom.JsonNumber;
+import me.flame.uniform.json.dom.JsonObject;
+import me.flame.uniform.json.dom.JsonShort;
+import me.flame.uniform.json.dom.JsonString;
+import me.flame.uniform.json.dom.JsonValue;
 import me.flame.uniform.json.exceptions.JsonException;
 import me.flame.uniform.json.features.JsonReadFeature;
+import me.flame.uniform.json.parser.JsonReadCursor;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 
@@ -30,6 +44,7 @@ public final class JsonCursor implements JsonReadCursor {
     /** true = byte is plain ASCII whitespace (space/tab/CR/LF) */
     private static final boolean[] WS = new boolean[256];
 
+
     /** Hex digit value, or -1 for non-hex. */
     private static final int[] HEX_VAL = new int[256];
 
@@ -55,7 +70,7 @@ public final class JsonCursor implements JsonReadCursor {
     private static final byte[] BYTES_INF     = {'I', 'n', 'f', 'i', 'n', 'i', 't', 'y'};
     private static final byte[] BYTES_NEG_INF = {'-', 'I', 'n', 'f', 'i', 'n', 'i', 't', 'y'};
 
-    // ── POW10: extended to ±22 — covers virtually all real-world JSON doubles ──
+    // POW10: extended to ±22 - covers virtually all real-world JSON doubles
     // Index 0 = 1e-22, index 22 = 1e0, index 44 = 1e22
     private static final double[] POW10 = new double[45];
     private static final int POW10_OFFSET = 22;
@@ -64,15 +79,15 @@ public final class JsonCursor implements JsonReadCursor {
         for (int i = 0; i < POW10.length; i++) POW10[i] = Math.pow(10, i - POW10_OFFSET);
     }
 
-    // Thread-local decode buffer — avoids repeated allocation in string slow path
+    // Thread-local decode buffer - avoids repeated allocation in string slow path
     private static final ThreadLocal<byte[]> DECODE_BUFFER = ThreadLocal.withInitial(() -> new byte[1024]);
 
-    // ── SWAR constants ────────────────────────────────────────────────────────
+    // SWAR constants
     // These operate on 8 bytes packed into a long (little-endian).
-    private static final long SWAR_01 = 0x0101010101010101L;
-    private static final long SWAR_80 = 0x8080808080808080L;
+    private static final long SWAR_01 = 0x0101010101010101L; // 72340172838076673
+    private static final long SWAR_80 = 0x8080808080808080L; // 9259542123273814144
     // Broadcast of '\\' (0x5C) and 0x20 (space) for SWAR scanning
-    private static final long SWAR_BACKSLASH = 0x5C5C5C5C5C5C5C5CL;
+    private static final long SWAR_BACKSLASH = 0x5C5C5C5C5C5C5C5CL; // 6655295901103053916
 
     // ============================================================
     // Instance state
@@ -105,49 +120,29 @@ public final class JsonCursor implements JsonReadCursor {
     private final boolean wrapExceptions;
     private final boolean anyComments;
 
-    public JsonCursor(byte[] input, ScanResult scan) {
-        this(input, scan, null);
-    }
-
     public JsonCursor(byte[] input, ScanResult scan, JsonConfig config) {
         this.input = input;
         this.scan  = scan;
         this.pos   = 0;
         this.limit = input.length;
 
-        if (config == null) {
-            allowJavaComments          = JsonReadFeature.ALLOW_JAVA_COMMENTS.isDefaultValue();
-            allowYamlComments          = JsonReadFeature.ALLOW_YAML_COMMENTS.isDefaultValue();
-            allowSingleQuotes          = JsonReadFeature.ALLOW_SINGLE_QUOTES.isDefaultValue();
-            allowUnquotedFieldNames    = JsonReadFeature.ALLOW_UNQUOTED_FIELD_NAMES.isDefaultValue();
-            allowUnescapedControlChars = JsonReadFeature.ALLOW_UNESCAPED_CONTROL_CHARS.isDefaultValue();
-            allowBackslashEscapingAny  = JsonReadFeature.ALLOW_BACKSLASH_ESCAPING_ANY_CHARACTER.isDefaultValue();
-            allowLeadingZeros          = JsonReadFeature.ALLOW_LEADING_ZEROS_FOR_NUMBERS.isDefaultValue();
-            allowNonNumericNumbers     = JsonReadFeature.ALLOW_NON_NUMERIC_NUMBERS.isDefaultValue();
-            allowMissingValues         = JsonReadFeature.ALLOW_MISSING_VALUES.isDefaultValue();
-            allowTrailingComma         = JsonReadFeature.ALLOW_TRAILING_COMMA.isDefaultValue();
-            strictDuplicateDetection   = JsonReadFeature.STRICT_DUPLICATE_DETECTION.isDefaultValue();
-            ignoreUndefined            = JsonReadFeature.IGNORE_UNDEFINED.isDefaultValue();
-            wrapExceptions             = JsonReadFeature.WRAP_EXCEPTIONS.isDefaultValue();
-        } else {
-            allowJavaComments          = config.hasReadFeature(JsonReadFeature.ALLOW_JAVA_COMMENTS);
-            allowYamlComments          = config.hasReadFeature(JsonReadFeature.ALLOW_YAML_COMMENTS);
-            allowSingleQuotes          = config.hasReadFeature(JsonReadFeature.ALLOW_SINGLE_QUOTES);
-            allowUnquotedFieldNames    = config.hasReadFeature(JsonReadFeature.ALLOW_UNQUOTED_FIELD_NAMES);
-            allowUnescapedControlChars = config.hasReadFeature(JsonReadFeature.ALLOW_UNESCAPED_CONTROL_CHARS);
-            allowBackslashEscapingAny  = config.hasReadFeature(JsonReadFeature.ALLOW_BACKSLASH_ESCAPING_ANY_CHARACTER);
-            allowLeadingZeros          = config.hasReadFeature(JsonReadFeature.ALLOW_LEADING_ZEROS_FOR_NUMBERS);
-            allowNonNumericNumbers     = config.hasReadFeature(JsonReadFeature.ALLOW_NON_NUMERIC_NUMBERS);
-            allowMissingValues         = config.hasReadFeature(JsonReadFeature.ALLOW_MISSING_VALUES);
-            allowTrailingComma         = config.hasReadFeature(JsonReadFeature.ALLOW_TRAILING_COMMA);
-            strictDuplicateDetection   = config.hasReadFeature(JsonReadFeature.STRICT_DUPLICATE_DETECTION);
-            ignoreUndefined            = config.hasReadFeature(JsonReadFeature.IGNORE_UNDEFINED);
-            wrapExceptions             = config.hasReadFeature(JsonReadFeature.WRAP_EXCEPTIONS);
-        }
-        anyComments = allowJavaComments || allowYamlComments;
+        this.allowJavaComments          = config.hasReadFeature(JsonReadFeature.ALLOW_JAVA_COMMENTS) || JsonReadFeature.ALLOW_JAVA_COMMENTS.isDefaultValue();
+        this.allowYamlComments          = config.hasReadFeature(JsonReadFeature.ALLOW_YAML_COMMENTS) || JsonReadFeature.ALLOW_YAML_COMMENTS.isDefaultValue();
+        this.allowSingleQuotes          = config.hasReadFeature(JsonReadFeature.ALLOW_SINGLE_QUOTES) || JsonReadFeature.ALLOW_SINGLE_QUOTES.isDefaultValue();
+        this.allowUnquotedFieldNames    = config.hasReadFeature(JsonReadFeature.ALLOW_UNQUOTED_FIELD_NAMES) || JsonReadFeature.ALLOW_UNQUOTED_FIELD_NAMES.isDefaultValue();
+        this.allowUnescapedControlChars = config.hasReadFeature(JsonReadFeature.ALLOW_UNESCAPED_CONTROL_CHARS) || JsonReadFeature.ALLOW_UNESCAPED_CONTROL_CHARS.isDefaultValue();
+        this.allowBackslashEscapingAny  = config.hasReadFeature(JsonReadFeature.ALLOW_BACKSLASH_ESCAPING_ANY_CHARACTER) || JsonReadFeature.ALLOW_BACKSLASH_ESCAPING_ANY_CHARACTER.isDefaultValue();
+        this.allowLeadingZeros          = config.hasReadFeature(JsonReadFeature.ALLOW_LEADING_ZEROS_FOR_NUMBERS) || JsonReadFeature.ALLOW_LEADING_ZEROS_FOR_NUMBERS.isDefaultValue();
+        this.allowNonNumericNumbers     = config.hasReadFeature(JsonReadFeature.ALLOW_NON_NUMERIC_NUMBERS) || JsonReadFeature.ALLOW_NON_NUMERIC_NUMBERS.isDefaultValue();
+        this.allowMissingValues         = config.hasReadFeature(JsonReadFeature.ALLOW_MISSING_VALUES) || JsonReadFeature.ALLOW_MISSING_VALUES.isDefaultValue();
+        this.allowTrailingComma         = config.hasReadFeature(JsonReadFeature.ALLOW_TRAILING_COMMA) || JsonReadFeature.ALLOW_TRAILING_COMMA.isDefaultValue();
+        this.strictDuplicateDetection   = config.hasReadFeature(JsonReadFeature.STRICT_DUPLICATE_DETECTION) || JsonReadFeature.STRICT_DUPLICATE_DETECTION.isDefaultValue();
+        this.ignoreUndefined            = config.hasReadFeature(JsonReadFeature.IGNORE_UNDEFINED) || JsonReadFeature.IGNORE_UNDEFINED.isDefaultValue();
+        this.wrapExceptions             = config.hasReadFeature(JsonReadFeature.WRAP_EXCEPTIONS) || JsonReadFeature.WRAP_EXCEPTIONS.isDefaultValue();
+        this.anyComments = allowJavaComments || allowYamlComments;
     }
 
-    /** Private sub-cursor constructor — copies flags by value, no config lookup. */
+    /** Private sub-cursor constructor - copies flags by value, no config lookup. */
     private JsonCursor(byte[] input, ScanResult scan, int pos, int limit, JsonCursor p) {
         this.input = input; this.scan = scan; this.pos = pos; this.limit = limit;
         this.allowJavaComments          = p.allowJavaComments;
@@ -383,10 +378,6 @@ public final class JsonCursor implements JsonReadCursor {
         return new JsonCursor(input, scan, fieldValueStart, fieldValueStart + fieldValueLen, this);
     }
 
-    // ============================================================
-    // Element value access — direct methods, zero ByteSlice allocation
-    // ============================================================
-
     @Override
     @Contract(" -> new")
     public @NotNull ByteSlice elementValue() {
@@ -394,7 +385,7 @@ public final class JsonCursor implements JsonReadCursor {
     }
 
     /**
-     * Direct element value accessors — each eliminates one ByteSlice allocation
+     * Direct element value accessors - each eliminates one ByteSlice allocation
      * and one intermediate String allocation compared to elementValue().toString().
      * These are the methods emitted by codegen for primitive array/collection elements.
      */
@@ -428,12 +419,20 @@ public final class JsonCursor implements JsonReadCursor {
 
     @Override
     public @NotNull String elementValueAsUnquotedString() {
-        final int s   = elementValueStart;
-        final int len = elementValueLen;
-        if (len >= 2 && input[s] == '"'  && input[s + len - 1] == '"')  return decodeJsonString(s + 1, len - 2);
-        if (allowSingleQuotes && len >= 2
-            && input[s] == '\'' && input[s + len - 1] == '\'') return decodeJsonString(s + 1, len - 2);
-        return new String(input, s, len, StandardCharsets.UTF_8);
+        return elementValueAsUnquotedString(elementValueStart, elementValueLen);
+    }
+
+    public @NotNull String elementValueAsUnquotedString(int s, int len) {
+        if (len >= 2 && input[s] == '"'  && input[s + len - 1] == '"') {
+            String decodedString = decodeJsonString(s + 1, len - 2);
+            return decodedString;
+        }
+        if (allowSingleQuotes && len >= 2 && input[s] == '\'' && input[s + len - 1] == '\'') {
+            String decodedString = decodeJsonString(s + 1, len - 2);
+            return decodedString;
+        }
+        String decodedString = new String(input, s, len, StandardCharsets.UTF_8);
+        return decodedString;
     }
 
     @Override
@@ -453,38 +452,56 @@ public final class JsonCursor implements JsonReadCursor {
         final byte[] inp = input;
         final int    lim = limit;
         int p = pos;
-        while (p < lim && WS[inp[p] & 0xFF]) p++;
+        while (p < lim && WS[inp[p] & 0xFF]) {
+            p++;
+        }
         pos = p;
-        if (anyComments) skipComments();
+        if (anyComments) {
+            skipComments();
+        }
     }
 
     private void skipComments() {
-        final byte[] inp = input;
-        final int    lim = limit;
+        final byte[]          inp = input;
+        final int             lim = limit;
+        int                   pos = this.pos;
+        boolean allowJavaComments = this.allowJavaComments;
+        boolean allowYamlComments = this.allowYamlComments;
         boolean again = true;
         while (again) {
             again = false;
-            while (pos < lim && WS[inp[pos] & 0xFF]) pos++;
+            while (pos < lim && WS[inp[pos] & 0xFF]) {
+                pos++;
+            }
 
             if (allowJavaComments && pos + 1 < lim && inp[pos] == '/') {
                 if (inp[pos + 1] == '/') {
                     pos += 2;
-                    while (pos < lim && inp[pos] != '\n') pos++;
+                    while (pos < lim && inp[pos] != '\n') {
+                        pos++;
+                    }
                     again = true;
                 } else if (inp[pos + 1] == '*') {
                     pos += 2;
-                    while (pos + 1 < lim && !(inp[pos] == '*' && inp[pos + 1] == '/')) pos++;
-                    if (pos + 1 < lim) pos += 2;
+                    while (pos + 1 < lim && !(inp[pos] == '*' && inp[pos + 1] == '/')) {
+                        pos++;
+                    }
+                    if (pos + 1 < lim) {
+                        pos += 2;
+                    }
                     again = true;
                 }
             }
 
             if (allowYamlComments && pos < lim && inp[pos] == '#') {
-                do pos++;
-                while (pos < lim && inp[pos] != '\n');
+                do {
+                    pos++;
+                } while (pos < lim && inp[pos] != '\n');
                 again = true;
             }
         }
+
+        this.pos = pos;
     }
 
     // ============================================================
@@ -696,25 +713,74 @@ public final class JsonCursor implements JsonReadCursor {
         final int    lanes      = structural.length;
         if (lanes == 0) return skipValueEndScalar(start);
 
+        // Depth counters for nested JSON structures
         int depthObj = 0, depthArr = 0;
+
+        // Determine which 64-bit lane (word) the start index belongs to.
+        // >>> 6 is equivalent to start / 64, but as a logical shift.
+        // Logical shift ensures zero-fill and avoids sign propagation.
         int word = start >>> 6;
-        long mask = (word < lanes) ? structural[word] & (~0L << (start & 63)) : 0L;
+
+        // Build initial mask for this 64-bit lane.
+        // If word is within bounds:
+        //   - structural[word] contains bit flags for structural characters.
+        //   - (~0L << (start & 63)) clears bits before the starting offset inside the lane.
+        // If word is out of bounds, mask = 0 to skip processing.
+        long mask = (word < lanes)
+            ? structural[word] & (~0L << (start & 63))
+            : 0L;
 
         while (word < lanes) {
+            // While there are structural characters left in this lane
             while (mask != 0L) {
+                // Find index of next structural character.
+                // numberOfTrailingZeros finds position of lowest set bit.
                 final int idx = (word << 6) + Long.numberOfTrailingZeros(mask);
+
                 if (idx >= limit) return limit;
+
                 switch (input[idx]) {
+                    // Opening object brace
                     case '{' -> depthObj++;
-                    case '}' -> { if (depthObj == 0 && depthArr == 0) return idx; if (--depthObj < 0) return idx; }
+
+                    // Closing object brace
+                    case '}' -> {
+                        // If at top level, this closes the structure.
+                        if (depthObj == 0 && depthArr == 0) return idx;
+
+                        // Decrement depth; if negative, unbalanced close.
+                        if (--depthObj < 0) return idx;
+                    }
+
+                    // Opening array bracket
                     case '[' -> depthArr++;
-                    case ']' -> { if (depthObj == 0 && depthArr == 0) return idx; if (--depthArr < 0) return idx; }
-                    case ',' -> { if (depthObj == 0 && depthArr == 0) return idx; }
+
+                    // Closing array bracket
+                    case ']' -> {
+                        // If at top level, this closes the structure.
+                        if (depthObj == 0 && depthArr == 0) return idx;
+
+                        // Decrement depth; if negative, unbalanced close.
+                        if (--depthArr < 0) return idx;
+                    }
+
+                    // Comma at top level separates values
+                    case ',' -> {
+                        if (depthObj == 0 && depthArr == 0) return idx;
+                    }
                 }
+
+                // Clear the lowest set bit to move to next structural character.
+                // Classic bit trick: removes lowest 1-bit.
                 mask &= mask - 1;
             }
-            if (++word < lanes) mask = structural[word];
+
+            // Move to next 64-bit lane
+            if (++word < lanes)
+                mask = structural[word];
         }
+
+        // If nothing found before limit, return limit.
         return limit;
     }
 
@@ -770,12 +836,7 @@ public final class JsonCursor implements JsonReadCursor {
 
         // Unrolled for the common 1–4 digit case to help JIT
         int val = 0;
-        while (i < end) {
-            final int d = inp[i++] - '0';
-            if ((d & 0xFFFFFFF0) != 0) throw new NumberFormatException("Not a digit at byte " + (i - 1));
-            val = val * 10 + d;
-        }
-        return neg ? -val : val;
+        return Math.toIntExact(processToNumber(inp, i, end, neg, val));
     }
 
     private long parseLong(final int start, final int len) {
@@ -796,8 +857,15 @@ public final class JsonCursor implements JsonReadCursor {
             throw error("Leading zeros not allowed at byte " + i);
 
         long val = 0L;
+        return processToNumber(inp, i, end, neg, val);
+    }
+
+    private static long processToNumber(byte[] inp, int i, int end, boolean neg, long val) {
         while (i < end) {
             final int d = inp[i++] - '0';
+            // this mask keeps all bits except the lowest 4 bits.
+            // the if statement is heavily equivalent to this:
+            // if (d < 0 || d > 9) throw new NumberFormatException("Not a digit at byte " + (i - 1));
             if ((d & 0xFFFFFFF0) != 0) throw new NumberFormatException("Not a digit at byte " + (i - 1));
             val = val * 10 + d;
         }
@@ -830,7 +898,7 @@ public final class JsonCursor implements JsonReadCursor {
         if (!allowLeadingZeros && i + 1 < end && inp[i] == '0' && inp[i + 1] >= '0')
             throw error("Leading zeros not allowed at byte " + i);
 
-        // Integer part — track overflow; if intPart > 2^53 we may lose precision
+        // Integer part - track overflow; if intPart > 2^53 we may lose precision
         long intPart = 0;
         int  intDigits = 0;
         while (i < end && inp[i] >= '0' && inp[i] <= '9') {
@@ -840,7 +908,8 @@ public final class JsonCursor implements JsonReadCursor {
 
         // If integer part overflows safe integer range, fall back to avoid precision loss
         if (intPart < 0) {
-            return Double.parseDouble(new String(inp, start, len, StandardCharsets.UTF_8));
+            String s = new String(inp, start, len, StandardCharsets.UTF_8);
+            return Double.parseDouble(s);
         }
 
         double result = intPart;
@@ -867,19 +936,21 @@ public final class JsonCursor implements JsonReadCursor {
             }
             if (expNeg) expVal = -expVal;
 
-            // Extended table covers ±22 — handles essentially all JSON doubles
+            // Extended table covers ±22 - handles essentially all JSON doubles
             if (expVal >= -POW10_OFFSET && expVal <= POW10_OFFSET) {
                 result *= POW10[expVal + POW10_OFFSET];
             } else {
+
                 // Outside table range: fall back to String parse for correctness
-                return Double.parseDouble(new String(inp, start, len, StandardCharsets.UTF_8));
+                String s = new String(inp, start, len, StandardCharsets.UTF_8);
+                return Double.parseDouble(s);
             }
         }
 
         return neg ? -result : result;
     }
 
-    /** Byte-by-byte match against a literal byte array — no String allocation. */
+    /** Byte-by-byte match against a literal byte array - no String allocation. */
     private boolean matchBytes(int start, int len, byte[] literal) {
         if (len != literal.length) return false;
         final byte[] inp = input;
@@ -960,21 +1031,21 @@ public final class JsonCursor implements JsonReadCursor {
     }
 
     // ============================================================
-    // SWAR helpers — operate on 8 bytes packed little-endian in a long
+    // SWAR helpers - operate on 8 bytes packed little-endian in a long
     // ============================================================
     /**
      * Reads 8 bytes from buf[off..off+7] as a little-endian long.
      * Caller must ensure off + 8 <= buf.length.
      */
     private static long readLongLE(byte[] buf, int off) {
-        return  ((long)(buf[off    ] & 0xFF))
-            | (((long)(buf[off + 1] & 0xFF)) <<  8)
-            | (((long)(buf[off + 2] & 0xFF)) << 16)
-            | (((long)(buf[off + 3] & 0xFF)) << 24)
-            | (((long)(buf[off + 4] & 0xFF)) << 32)
-            | (((long)(buf[off + 5] & 0xFF)) << 40)
-            | (((long)(buf[off + 6] & 0xFF)) << 48)
-            | (((long)(buf[off + 7] & 0xFF)) << 56);
+        return  ((long) (buf[off] & 0xFF))
+            | (((long) (buf[off + 1] & 0xFF)) <<  8)
+            | (((long) (buf[off + 2] & 0xFF)) << 16)
+            | (((long) (buf[off + 3] & 0xFF)) << 24)
+            | (((long) (buf[off + 4] & 0xFF)) << 32)
+            | (((long) (buf[off + 5] & 0xFF)) << 40)
+            | (((long) (buf[off + 6] & 0xFF)) << 48)
+            | (((long) (buf[off + 7] & 0xFF)) << 56);
     }
 
     /**
@@ -996,5 +1067,184 @@ public final class JsonCursor implements JsonReadCursor {
      */
     private static long swarHasLessThan(long v, int n) {
         return (v - (SWAR_01 * n)) & ~v & SWAR_80;
+    }
+
+    // ============================================================
+    // Top-level value parser
+    // ============================================================
+
+    /**
+     * Public entry point. The root of the input must be a JSON object ({@code {...}}).
+     * Throws {@link JsonException} if the root token is anything else.
+     */
+    public JsonObject parseValue() {
+        skipWs();
+        if (pos >= limit) throw new JsonException("Unexpected end of input");
+        if (input[pos] != '{')
+            throw new JsonException("Expected '{' at byte " + pos + " but got '" + (char) input[pos] + "'");
+        return parseObjectIterative();
+    }
+
+    /**
+     * Internal recursive parser - returns any {@link JsonValue}.
+     * Used by {@link #parseObjectIterative()} and {@link #parseArrayIterative()}
+     * for nested field values and array elements.
+     */
+    private JsonValue parseValueInternal() {
+        skipWs();
+        if (pos >= limit) throw new JsonException("Unexpected end of input");
+
+        byte first = input[pos];
+
+        return switch (first) {
+            case '"' -> {
+                int valueLength = findValueLength(pos);
+                yield new JsonString(elementValueAsUnquotedString(pos, valueLength));
+            }
+            case '{' -> parseObjectIterative();
+            case '[' -> parseArrayIterative();
+            case 't' -> consumeLiteral("true",  JsonBoolean.of(true));
+            case 'f' -> consumeLiteral("false", JsonBoolean.of(false));
+            case 'n' -> consumeLiteral("null",  JsonNull.INSTANCE);
+            default  -> {
+                if ((first >= '0' && first <= '9') || first == '-') {
+                    yield parseNumber();
+                }
+                throw new JsonException("Unknown value type at byte " + pos);
+            }
+        };
+    }
+
+    /**
+     * Classifies and parses a JSON number token starting at {@link #pos}.
+     *
+     * <h3>Dispatch rules (checked in order):</h3>
+     * <ol>
+     *   <li><b>Explicit suffix</b> on the last character:
+     *       <ul>
+     *         <li>{@code b} / {@code B} -> {@link JsonByte}</li>
+     *         <li>{@code s} / {@code S} -> {@link JsonShort}</li>
+     *         <li>{@code L} / {@code l} -> {@link JsonLong}</li>
+     *         <li>{@code f} / {@code F} -> {@link JsonFloat}</li>
+     *         <li>{@code d} / {@code D} -> {@link JsonDouble}</li>
+     *       </ul>
+     *       The suffix character is excluded from the numeric payload passed to
+     *       the underlying {@code parseInt} / {@code parseLong} / {@code parseDouble}
+     *       helpers so they only see clean digits.
+     *   </li>
+     *   <li><b>Decimal point or exponent</b> ({@code .} / {@code e} / {@code E}) anywhere
+     *       in the token -> {@link JsonDouble} (no suffix required).</li>
+     *   <li><b>Plain integer</b> (no suffix, no decimal):
+     *       <ul>
+     *         <li>Fits in {@code int} range -> {@link JsonInteger}</li>
+     *         <li>Otherwise -> {@link JsonLong}</li>
+     *       </ul>
+     *   </li>
+     * </ol>
+     */
+    private JsonNumber parseNumber() {
+        final int    tokenStart = pos;
+        final int    tokenLen   = findValueLength(tokenStart);
+        final byte[] inp        = input;
+
+        final byte lastByte = inp[tokenStart + tokenLen - 1];
+
+        final int payloadLen = tokenLen - 1;
+
+        switch (lastByte) {
+            case 'b', 'B' -> {
+                pos += tokenLen;
+                return new JsonByte((byte) parseInt(tokenStart, payloadLen));
+            }
+            case 's', 'S' -> {
+                pos += tokenLen;
+                return new JsonShort((short) parseInt(tokenStart, payloadLen));
+            }
+            case 'l', 'L' -> {
+                pos += tokenLen;
+                return new JsonLong(parseLong(tokenStart, payloadLen));
+            }
+            case 'f', 'F' -> {
+                pos += tokenLen;
+                return new JsonFloat((float) parseDouble(tokenStart, payloadLen));
+            }
+            case 'd', 'D' -> {
+                pos += tokenLen;
+                return new JsonDouble(parseDouble(tokenStart, payloadLen));
+            }
+        }
+
+        final int tokenEnd = tokenStart + tokenLen;
+        for (int i = tokenStart; i < tokenEnd; i++) {
+            final byte b = inp[i];
+            if (b == '.' || b == 'e' || b == 'E') {
+                pos += tokenLen;
+                return new JsonDouble(parseDouble(tokenStart, tokenLen));
+            }
+        }
+
+        pos += tokenLen;
+        final long raw = parseLong(tokenStart, tokenLen);
+        if (raw >= Integer.MIN_VALUE && raw <= Integer.MAX_VALUE) {
+            return new JsonInteger((int) raw);
+        }
+        return new JsonLong(raw);
+    }
+
+    private JsonValue consumeLiteral(String literal, JsonValue value) {
+        int length = literal.length();
+        if (pos + length > limit)
+            throw new JsonException("Unexpected end of input when parsing literal at " + pos);
+
+        for (int i = 0; i < length; i++) {
+            if (input[pos + i] != literal.charAt(i))
+                throw new JsonException("Invalid literal at byte " + pos);
+        }
+        pos += length;
+        return value;
+    }
+
+    // Iterative object parser
+    @SuppressWarnings("ObjectAllocationInLoop")
+    private JsonObject parseObjectIterative() {
+        if (!enterObject()) throw new JsonException("Expected '{' at byte " + pos);
+
+        JsonObject obj = new JsonObject();
+        while (true) {
+            skipWs();
+            if (pos < limit && input[pos] == '}') {
+                pos++; // consume closing brace
+                break;
+            }
+
+            if (!nextField()) throw new JsonException("Expected field at byte " + pos);
+
+            String key = fieldNameAsString();
+            JsonCursor valueCursor = fieldValueCursor();
+            JsonValue jsonValue = valueCursor.parseValueInternal();
+            obj.put(key, jsonValue);
+        }
+        return obj;
+    }
+
+    // Iterative array parser
+    @SuppressWarnings("ObjectAllocationInLoop")
+    private JsonArray parseArrayIterative() {
+        if (!enterArray()) throw new JsonException("Expected '[' at byte " + pos);
+
+        JsonArray arr = new JsonArray();
+        while (true) {
+            skipWs();
+            if (pos < limit && input[pos] == ']') {
+                pos++; // consume closing bracket
+                break;
+            }
+
+            if (!nextElement()) throw new JsonException("Expected element at byte " + pos);
+
+            JsonCursor valueCursor = elementValueCursor();
+            arr.add(valueCursor.parseValueInternal());
+        }
+        return arr;
     }
 }

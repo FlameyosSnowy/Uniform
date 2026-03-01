@@ -1,4 +1,4 @@
-# Uniform JSON — Benchmarks
+# Uniform JSON - Benchmarks
 
 Benchmarks are run with [JMH](https://github.com/openjdk/jmh) in **Throughput** mode (`ops/ms`, higher is better).  
 Environment: **Java 21**, 8 measurement iterations × 2 s, 3 warmup iterations, fork 1.  

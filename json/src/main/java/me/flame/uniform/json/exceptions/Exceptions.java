@@ -1,9 +1,12 @@
 package me.flame.uniform.json.exceptions;
 
+import org.jetbrains.annotations.NotNull;
+
 import java.util.List;
 
 public class Exceptions {
-    public static JsonException mergeExceptions(String message, List<? extends Throwable> errors) {
+    @NotNull
+    public static JsonException mergeExceptions(String message, @NotNull List<? extends Throwable> errors) {
         if (errors.isEmpty()) {
             return new JsonException(message);
         }

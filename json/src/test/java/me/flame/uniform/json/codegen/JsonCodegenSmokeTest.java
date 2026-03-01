@@ -4,6 +4,8 @@ import me.flame.uniform.core.resolvers.ResolverRegistry;
 import me.flame.uniform.json.JsonAdapter;
 import me.flame.uniform.json.JsonConfig;
 import me.flame.uniform.json.codegen.fixtures.*;
+import me.flame.uniform.json.dom.JsonArray;
+import me.flame.uniform.json.dom.JsonObject;
 import me.flame.uniform.json.writers.prettifiers.JsonFormatter;
 
 import org.junit.jupiter.api.Test;
@@ -34,6 +36,66 @@ public class JsonCodegenSmokeTest {
 
         assertTrue(json.contains("\"id\":2"));
         assertTrue(json.contains("\"name\":\"b\""));
+    }
+
+    @Test
+    void pojo_with_list_dom() {
+        JsonAdapter adapter = new JsonAdapter(config());
+
+        JsonObject value = adapter.readValue(
+            "{\"id\":10,\"items\":[{\"id\":1,\"name\":\"a\"},{\"id\":2,\"name\":\"b\"},{\"id\":3,\"name\":\"c\"}]}"
+        );
+
+        assertNotNull(value);
+        assertInstanceOf(JsonObject.class, value);
+        assertEquals(10, value.getInt("id"));
+
+        JsonArray items = value.getArray("items");
+        assertEquals(3, items.size());
+        assertEquals(1,   items.getObject(0).getInt("id"));
+        assertEquals("a", items.getObject(0).getString("name"));
+        assertEquals("b", items.getObject(1).getString("name"));
+        assertEquals(3,   items.getObject(2).getInt("id"));
+    }
+
+    @Test
+    void deeply_nested_tree_dom() {
+        JsonAdapter adapter = new JsonAdapter(config());
+
+        JsonObject value = adapter.readValue(
+            "{\"id\":1,\"name\":\"root\",\"children\":[" +
+                "{\"id\":2,\"name\":\"child1\",\"children\":[]}," +
+                "{\"id\":3,\"name\":\"child2\",\"children\":[" +
+                "{\"id\":4,\"name\":\"grandchild\",\"children\":[]}" +
+                "]}" +
+                "]}"
+        );
+
+        assertNotNull(value);
+        assertEquals(1,      value.getInt("id"));
+        assertEquals("root", value.getString("name"));
+
+        JsonArray children = value.getArray("children");
+        assertEquals(2, children.size());
+        assertEquals("child1", children.getObject(0).getString("name"));
+
+        JsonArray grandchildren = children.getObject(1).getArray("children");
+        assertEquals(1, grandchildren.size());
+        assertEquals(4,            grandchildren.getObject(0).getInt("id"));
+        assertEquals("grandchild", grandchildren.getObject(0).getString("name"));
+    }
+
+    @Test
+    void pojo_read_and_write_dom() {
+        JsonAdapter adapter = new JsonAdapter(config());
+        JsonObject value = adapter.readValue("{\"id\":1,\"name\":\"a\"}");
+
+        System.out.println(value);
+
+        assertNotNull(value);
+        assertInstanceOf(JsonObject.class, value);
+        assertEquals(1, value.getInt("id"));
+        assertEquals("a", value.getString("name"));
     }
 
     @Test

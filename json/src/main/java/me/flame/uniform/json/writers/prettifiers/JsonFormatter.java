@@ -117,10 +117,6 @@ public final class JsonFormatter {
         return new JsonException(message + " at line " + line + ", column " + col + suffix);
     }
 
-    // ════════════════════════════════════════════════════════════════════════
-    //  Buffer → byte[]
-    // ════════════════════════════════════════════════════════════════════════
-
     private static byte[] toArray(ByteBuffer buffer) {
         final byte[] arr;
 
@@ -128,7 +124,6 @@ public final class JsonFormatter {
             final byte[] backing = buffer.array();
             final int    offset  = buffer.arrayOffset() + buffer.position();
             final int    length  = buffer.remaining();
-            // Use the backing array directly when it maps exactly — zero copy.
             if (offset == 0 && length == backing.length) {
                 arr = backing;
             } else {

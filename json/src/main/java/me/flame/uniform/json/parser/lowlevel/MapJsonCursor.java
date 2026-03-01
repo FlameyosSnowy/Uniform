@@ -1,5 +1,6 @@
 package me.flame.uniform.json.parser.lowlevel;
 
+import me.flame.uniform.json.parser.JsonReadCursor;
 import org.jetbrains.annotations.NotNull;
 
 import java.nio.charset.StandardCharsets;
@@ -18,12 +19,12 @@ import java.util.Map;
  *
  * <h3>Supported value types in the map</h3>
  * <ul>
- *   <li>{@link String} — returned directly by the string accessors</li>
+ *   <li>{@link String} - returned directly by the string accessors</li>
  *   <li>{@link Number} ({@link Integer}, {@link Long}, {@link Double}, etc.)</li>
  *   <li>{@link Boolean}</li>
- *   <li>{@link Map}{@code <String, Object>} — navigated via {@link #enterObject()}</li>
- *   <li>{@link List}{@code <Object>} — navigated via {@link #enterArray()}</li>
- *   <li>{@code null} — numeric accessors return 0, boolean returns false,
+ *   <li>{@link Map}{@code <String, Object>} - navigated via {@link #enterObject()}</li>
+ *   <li>{@link List}{@code <Object>} - navigated via {@link #enterArray()}</li>
+ *   <li>{@code null} - numeric accessors return 0, boolean returns false,
  *       string returns {@code ""}, cursors return an empty cursor</li>
  * </ul>
  *
@@ -79,7 +80,7 @@ public final class MapJsonCursor implements JsonReadCursor {
         this.entered         = false;
     }
 
-    /** Private scalar sub-cursor — wraps a single leaf value. */
+    /** Private scalar sub-cursor - wraps a single leaf value. */
     private MapJsonCursor(Object scalarValue) {
         this.mode        = Mode.SCALAR;
         this.scalarValue = scalarValue;
@@ -161,7 +162,7 @@ public final class MapJsonCursor implements JsonReadCursor {
 
     @Override
     public int fieldNameHash() {
-        // FNV-1a over the UTF-8 bytes of the key — identical algorithm to JsonCursor
+        // FNV-1a over the UTF-8 bytes of the key - identical algorithm to JsonCursor
         // so generated switch-on-hash dispatch works without modification.
         String key = currentKey != null ? currentKey : "";
         int h = 0x811c9dc5;
@@ -188,7 +189,7 @@ public final class MapJsonCursor implements JsonReadCursor {
     }
 
     // =========================================================
-    // Field value access — scalar
+    // Field value access - scalar
     // =========================================================
 
     @Override
@@ -215,7 +216,7 @@ public final class MapJsonCursor implements JsonReadCursor {
     }
 
     // =========================================================
-    // Element value access — scalar
+    // Element value access - scalar
     // =========================================================
 
     @Override
@@ -248,9 +249,9 @@ public final class MapJsonCursor implements JsonReadCursor {
     /**
      * Creates the appropriate sub-cursor for {@code value}:
      * <ul>
-     *   <li>Map  → object cursor (caller must call {@link #enterObject()})</li>
-     *   <li>List → array cursor  (caller must call {@link #enterArray()})</li>
-     *   <li>anything else → scalar cursor</li>
+     *   <li>Map  -> object cursor (caller must call {@link #enterObject()})</li>
+     *   <li>List -> array cursor  (caller must call {@link #enterArray()})</li>
+     *   <li>anything else -> scalar cursor</li>
      * </ul>
      */
     private static MapJsonCursor subCursorFor(Object value) {
@@ -272,44 +273,52 @@ public final class MapJsonCursor implements JsonReadCursor {
     // =========================================================
 
     private static int toInt(Object v) {
-        return switch (v) {
-            case Number number -> number.intValue();
-            case String s -> Integer.parseInt(s);
-            case Boolean b -> b ? 1 : 0;
-            case null, default -> 0;
-        };
+        if (v instanceof Number number) {
+            return number.intValue();
+        } else if (v instanceof String s) {
+            return Integer.parseInt(s);
+        } else if (v instanceof Boolean b) {
+            return b ? 1 : 0;
+        }
+        return 0;
     }
 
     private static long toLong(Object v) {
-        return switch (v) {
-            case Number number -> number.longValue();
-            case String s -> Long.parseLong(s);
-            case Boolean b -> b ? 1L : 0L;
-            case null, default -> 0L;
-        };
+        if (v instanceof Number number) {
+            return number.longValue();
+        } else if (v instanceof String s) {
+            return Long.parseLong(s);
+        } else if (v instanceof Boolean b) {
+            return b ? 1L : 0L;
+        }
+        return 0L;
     }
 
     private static double toDouble(Object v) {
-        return switch (v) {
-            case Number number -> number.doubleValue();
-            case String s -> Double.parseDouble(s);
-            case Boolean b -> b ? 1.0 : 0.0;
-            case null, default -> 0.0;
-        };
+        if (v instanceof Number number) {
+            return number.doubleValue();
+        } else if (v instanceof String s) {
+            return Double.parseDouble(s);
+        } else if (v instanceof Boolean b) {
+            return b ? 1.0 : 0.0;
+        }
+        return 0.0;
     }
 
     private static boolean toBoolean(Object v) {
-        return switch (v) {
-            case Boolean b -> b;
-            case Number number -> number.intValue() != 0;
-            case String s -> "true".equalsIgnoreCase(s) || "1".equals(s) || "yes".equalsIgnoreCase(s);
-            case null, default -> false;
-        };
+        if (v instanceof Boolean b) {
+            return b;
+        } else if (v instanceof Number number) {
+            return number.intValue() != 0;
+        } else if (v instanceof String s) {
+            return "true".equalsIgnoreCase(s) || "1".equals(s) || "yes".equalsIgnoreCase(s);
+        }
+        return false;
     }
 
     private static @NotNull String toString(Object v) {
-        if (v == null)   return "";
-        return String.valueOf(v);
+        if (v == null) return "";
+        return v.toString();
     }
 
     private static @NotNull ByteSlice toByteSlice(Object v) {

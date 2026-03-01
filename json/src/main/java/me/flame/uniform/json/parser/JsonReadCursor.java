@@ -1,5 +1,8 @@
-package me.flame.uniform.json.parser.lowlevel;
+package me.flame.uniform.json.parser;
 
+import me.flame.uniform.json.parser.lowlevel.ByteSlice;
+import me.flame.uniform.json.parser.lowlevel.JsonCursor;
+import me.flame.uniform.json.parser.lowlevel.MapJsonCursor;
 import org.jetbrains.annotations.NotNull;
 
 /**
@@ -34,6 +37,7 @@ import org.jetbrains.annotations.NotNull;
  *   }
  * </pre>
  */
+@SuppressWarnings("unused")
 public interface JsonReadCursor {
 
     // =========================================================
@@ -102,10 +106,6 @@ public interface JsonReadCursor {
      */
     boolean fieldNameEquals(@NotNull String expected);
 
-    // =========================================================
-    // Field value access — scalar
-    // =========================================================
-
     /** Returns the raw current field value as a {@link ByteSlice}. */
     @NotNull ByteSlice fieldValue();
 
@@ -128,10 +128,6 @@ public interface JsonReadCursor {
      * value. Used for nested object / array fields.
      */
     @NotNull JsonReadCursor fieldValueCursor();
-
-    // =========================================================
-    // Element value access — scalar
-    // =========================================================
 
     /** Returns the raw current array element as a {@link ByteSlice}. */
     @NotNull ByteSlice elementValue();

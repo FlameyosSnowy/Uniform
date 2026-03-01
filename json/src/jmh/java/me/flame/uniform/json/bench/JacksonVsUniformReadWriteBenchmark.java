@@ -105,7 +105,6 @@ public class JacksonVsUniformReadWriteBenchmark {
         );
     }
 
-    // Generates large.json: 1000-element user array — deterministic, matches gen.py
     static String buildLargeJson(ObjectMapper jackson, int count) throws Exception {
         java.util.Random rng = new java.util.Random(42);
         String alpha = "abcdefghijklmnopqrstuvwxyz";

@@ -54,7 +54,7 @@ import java.util.Set;
 
 @SuppressWarnings("ObjectAllocationInLoop")
 @AutoService(Processor.class)
-@SupportedSourceVersion(SourceVersion.RELEASE_21)
+@SupportedSourceVersion(SourceVersion.RELEASE_17)
 public final class UniformJsonProcessor extends AbstractProcessor {
 
     private Elements elements;
@@ -239,22 +239,22 @@ public final class UniformJsonProcessor extends AbstractProcessor {
                 String javaName = methodName;
                 String jsonName = jsonNameFor(m, javaName);
                 props.add(buildProperty(type, m, javaName, jsonName, m.getReturnType(), AccessKind.GETTER, javaName, dynamicSuppliers, enqueue));
-                propByJavaName.put(javaName, props.getLast());
+                propByJavaName.put(javaName, props.get(props.size() - 1));
                 continue;
             }
 
             if (m.getParameters().size() != 1) continue;
             if (m.getReturnType().getKind() != TypeKind.VOID) continue;
 
-            TypeMirror paramType = m.getParameters().getFirst().asType();
+            TypeMirror paramType = m.getParameters().get(0).asType();
 
             SerializedField sf = m.getAnnotation(SerializedField.class);
             SerializedName  sn = m.getAnnotation(SerializedName.class);
 
             // Derive the logical field name this setter targets:
-            //   - setFoo(...)  → "foo"  (bean convention)
-            //   - foo(...)     → "foo"  (fluent convention)
-            //   - anything else with explicit annotation → use method name as-is
+            //   - setFoo(...)  -> "foo"  (bean convention)
+            //   - foo(...)     -> "foo"  (fluent convention)
+            //   - anything else with explicit annotation -> use method name as-is
             String targetFieldName = null;
             if (methodName.startsWith("set") && methodName.length() > 3) {
                 targetFieldName = Character.toLowerCase(methodName.charAt(3)) + methodName.substring(4);
@@ -396,7 +396,7 @@ public final class UniformJsonProcessor extends AbstractProcessor {
     }
 
     private void writeReader(TypeElement typeElement, ClassName target, ClassName readerName, List<Property> props) throws IOException {
-        ClassName jsonCursor      = ClassName.get("me.flame.uniform.json.parser.lowlevel", "JsonReadCursor");
+        ClassName jsonCursor      = ClassName.get("me.flame.uniform.json.parser", "JsonReadCursor");
         ClassName jsonMapper      = ClassName.get("me.flame.uniform.json.mappers", "JsonMapper");
         ClassName jsonConfig      = ClassName.get("me.flame.uniform.json", "JsonConfig");
 
@@ -539,7 +539,7 @@ public final class UniformJsonProcessor extends AbstractProcessor {
         TypeName t   = p.typeName();
         String   var = p.javaName();
 
-        ClassName jsonCursor          = ClassName.get("me.flame.uniform.json.parser.lowlevel", "JsonCursor");
+        ClassName jsonCursor          = ClassName.get("me.flame.uniform.json.parser", "JsonReadCursor");
         ClassName jsonMapperRegistry  = ClassName.get("me.flame.uniform.json.mappers", "JsonMapperRegistry");
         ClassName jsonMapper          = ClassName.get("me.flame.uniform.json.mappers", "JsonMapper");
         ClassName resolverRegistry    = ClassName.get("me.flame.uniform.core.resolvers", "ResolverRegistry");
@@ -550,7 +550,7 @@ public final class UniformJsonProcessor extends AbstractProcessor {
         CollectionKind ck = collectionKind(p.typeMirror());
 
         if (ck == CollectionKind.LIST || ck == CollectionKind.SET || ck == CollectionKind.QUEUE) {
-            TypeMirror argMirror = ((DeclaredType) p.typeMirror()).getTypeArguments().getFirst();
+            TypeMirror argMirror = ((DeclaredType) p.typeMirror()).getTypeArguments().get(0);
             TypeName   argType   = TypeName.get(argMirror);
 
             ClassName implClass = switch (ck) {
@@ -944,7 +944,7 @@ public final class UniformJsonProcessor extends AbstractProcessor {
             } else if (t.equals(ClassName.get(String.class))) {
                 cb.addStatement("out.value($L)", access);
             } else if (ck == CollectionKind.LIST || ck == CollectionKind.SET || ck == CollectionKind.QUEUE) {
-                TypeMirror argMirror = ((DeclaredType) p.typeMirror()).getTypeArguments().getFirst();
+                TypeMirror argMirror = ((DeclaredType) p.typeMirror()).getTypeArguments().get(0);
                 TypeName   argType   = TypeName.get(argMirror);
                 emitIterableWrite(cb, access, argType, jsonWriterMapper, jsonMapperRegistry);
             } else if (ck == CollectionKind.ARRAY) {
@@ -1116,7 +1116,7 @@ public final class UniformJsonProcessor extends AbstractProcessor {
 
     /**
      * Looks for a constructor whose parameter types match the given properties
-     * in order. Type erasure is accounted for — only the declared (erased) type
+     * in order. Type erasure is accounted for - only the declared (erased) type
      * of each parameter needs to match the property's erased type.
      */
     private ExecutableElement findFullArgConstructor(TypeElement type, List<Property> assignable) {

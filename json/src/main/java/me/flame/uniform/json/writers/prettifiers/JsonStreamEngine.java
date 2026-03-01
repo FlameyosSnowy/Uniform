@@ -1,11 +1,11 @@
 package me.flame.uniform.json.writers.prettifiers;
 
 import me.flame.turboscanner.ScanResult;
+
 import org.jetbrains.annotations.NotNull;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
-import java.util.List;
 import java.util.function.BiConsumer;
 
 final class JsonStreamEngine {
@@ -38,7 +38,7 @@ final class JsonStreamEngine {
 
     private boolean fatalError = false;
 
-    // Error builder callback — kept as a field so JsonFormatter can supply its
+    // Error builder callback - kept as a field so JsonFormatter can supply its
     // position-aware factory without us coupling to it directly.
     private final BiConsumer<String, Integer> onError;
 
@@ -57,7 +57,7 @@ final class JsonStreamEngine {
         this.indentTable = new byte[tableLen];
         Arrays.fill(this.indentTable, (byte) ' ');
 
-        // Output buffer — use power-of-two ceiling for cheaper grow math
+        // Output buffer - use power-of-two ceiling for cheaper grow math
         this.out = new byte[Math.max(Integer.highestOneBit(initialCapacity - 1) << 1, 64)];
     }
 
@@ -297,7 +297,7 @@ final class JsonStreamEngine {
     /** Ensures at least {@code n} bytes remain in {@code out}. */
     private void ensureN(final int n) {
         if (pos + n <= out.length) return;
-        // Double until large enough — bit-twiddling avoids division
+        // Double until large enough - bit-twiddling avoids division
         int newCap = out.length;
         do { newCap <<= 1; } while (pos + n > newCap);
         out = Arrays.copyOf(out, newCap);
