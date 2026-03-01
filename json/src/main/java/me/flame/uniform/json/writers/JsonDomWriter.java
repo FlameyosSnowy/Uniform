@@ -33,10 +33,10 @@ import java.util.Objects;
  *
  * <h3>Work-item protocol</h3>
  * <ul>
- *   <li>{@link WriteValue}       — emit a scalar, or open a container and push its children</li>
- *   <li>{@link WriteObjectEntry} — emit {@code out.name(key)} then expand the value</li>
- *   <li>{@link CloseObject}      — emit {@code out.endObject()}</li>
- *   <li>{@link CloseArray}       — emit {@code out.endArray()}</li>
+ *   <li>{@link WriteValue}       - emit a scalar, or open a container and push its children</li>
+ *   <li>{@link WriteObjectEntry} - emit {@code out.name(key)} then expand the value</li>
+ *   <li>{@link CloseObject}      - emit {@code out.endObject()}</li>
+ *   <li>{@link CloseArray}       - emit {@code out.endArray()}</li>
  * </ul>
  *
  * Because the stack is LIFO, children of a container are pushed in <em>reverse</em>
@@ -58,7 +58,7 @@ public final class JsonDomWriter {
     /**
      * Serialises {@code value} and returns the resulting JSON string.
      *
-     * @param value  the DOM node to serialise — must not be {@code null}
+     * @param value  the DOM node to serialise - must not be {@code null}
      * @return a well-formed JSON string
      */
     public static @NotNull String write(@NotNull JsonValue value) {
@@ -84,6 +84,7 @@ public final class JsonDomWriter {
         return out.toString();
     }
 
+    @SuppressWarnings("ObjectAllocationInLoop")
     private static void expand(JsonValue value, Deque<Task> stack, JsonStringWriter out) {
         if (Objects.requireNonNull(value) instanceof JsonNull) {
             out.nullValue();
@@ -95,8 +96,8 @@ public final class JsonDomWriter {
             out.value(s.value());
         } else if (value instanceof JsonObject obj) {
             out.beginObject();
-            // Collect entries so we can push in reverse (LIFO → original order).
-            // Use the map's entry set directly — no extra allocation beyond the list.
+            // Collect entries so we can push in reverse (LIFO -> original order).
+            // Use the map's entry set directly - no extra allocation beyond the list.
             List<Map.Entry<String, JsonValue>> entries = new ArrayList<>(obj.size());
             for (Map.Entry<String, JsonValue> e : obj) entries.add(e);
 

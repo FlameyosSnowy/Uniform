@@ -8,6 +8,7 @@ import me.flame.uniform.json.mappers.JsonMapperRegistry;
 import me.flame.uniform.json.mappers.JsonWriterMapper;
 import me.flame.uniform.json.parser.JsonCursors;
 import me.flame.uniform.json.parser.lowlevel.JsonCursor;
+import me.flame.uniform.json.parser.lowlevel.JsonDomCursor;
 import me.flame.uniform.json.parser.lowlevel.MapJsonCursor;
 import me.flame.uniform.json.writers.JsonDomBuilder;
 import me.flame.uniform.json.writers.JsonDomWriter;
@@ -151,7 +152,7 @@ public record JsonAdapter(JsonConfig config, Executor executor) {
      * {@link me.flame.uniform.json.mappers.JsonWriterMapper} for {@code T} against
      * a {@link JsonDomBuilder} instead of a string writer.
      *
-     * @param entity the object to convert — must not be {@code null}
+     * @param entity the object to convert - must not be {@code null}
      * @param <T>    the entity type; a {@code JsonWriterMapper<T>} must be registered
      * @return the entity represented as a {@link JsonObject}
      * @throws IllegalStateException if no writer is registered for the entity's type,
@@ -169,6 +170,27 @@ public record JsonAdapter(JsonConfig config, Executor executor) {
         return builder.result();
     }
 
+    /**
+     * Converts a {@link JsonObject} DOM tree to an instance of {@code type} by running
+     * the registered {@link me.flame.uniform.json.mappers.JsonMapper} for {@code T}
+     * against a {@link JsonDomCursor} instead of a byte-array cursor.
+     *
+     * @param tree the DOM tree to convert - must not be {@code null}
+     * @param type the target class; a {@code JsonMapper<T>} must be registered
+     * @param <T>  the target type
+     * @return a fully populated instance of {@code T}
+     * @throws IllegalStateException if no reader is registered for {@code type}
+     */
+    @SuppressWarnings("unchecked")
+    public <T> @NotNull T treeToValue(@NotNull JsonObject tree, @NotNull Class<T> type) {
+        JsonMapper<T> mapper = (JsonMapper<T>) JsonMapperRegistry.getReader(type);
+        if (mapper == null)
+            throw new IllegalStateException("No JsonMapper registered for " + type.getName()
+                + ". Ensure the class is annotated with @SerializedObject and was processed by the annotation processor.");
+
+        JsonDomCursor cursor = new JsonDomCursor(tree);
+        return mapper.map(cursor);
+    }
 
     /**
      * Asynchronously serializes {@code value} to a JSON string.

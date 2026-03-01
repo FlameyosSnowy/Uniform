@@ -31,10 +31,6 @@ import java.util.Deque;
  */
 public final class JsonDomBuilder extends JsonStringWriter {
 
-    // -------------------------------------------------------------------------
-    // Frame — tracks current container context
-    // -------------------------------------------------------------------------
-
     private sealed interface Frame permits ObjectFrame, ArrayFrame {}
 
     private static final class ObjectFrame implements Frame {
@@ -46,20 +42,12 @@ public final class JsonDomBuilder extends JsonStringWriter {
         final JsonArray arr = new JsonArray();
     }
 
-    // -------------------------------------------------------------------------
-    // State
-    // -------------------------------------------------------------------------
-
     private final Deque<Frame> stack = new ArrayDeque<>();
     private @Nullable JsonValue root = null;
 
     public JsonDomBuilder() {
         super();
     }
-
-    // -------------------------------------------------------------------------
-    // Result
-    // -------------------------------------------------------------------------
 
     /**
      * Returns the built {@link JsonObject} after the mapper has finished writing.
