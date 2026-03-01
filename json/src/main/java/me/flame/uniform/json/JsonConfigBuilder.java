@@ -5,6 +5,8 @@ import me.flame.uniform.json.features.JsonReadFeature;
 import me.flame.uniform.json.features.JsonWriteFeature;
 import me.flame.uniform.core.resolvers.TypeResolver;
 import me.flame.uniform.core.resolvers.ContextDynamicTypeSupplier;
+import me.flame.uniform.json.resolvers.CoreTypeResolver;
+import me.flame.uniform.json.resolvers.CoreTypeResolverRegistry;
 
 import java.util.Arrays;
 import java.util.Collection;
@@ -59,12 +61,12 @@ public class JsonConfigBuilder {
         this.writeFeatures.addAll(Arrays.asList(writeFeatures));
         return this;
     }
-    
-    public <T> JsonConfigBuilder addTypeResolver(Class<T> type, TypeResolver<? extends T> resolver) {
-        ResolverRegistry.register(type, resolver);
+
+    public <T> JsonConfigBuilder addTypeResolver(CoreTypeResolver<? extends T> resolver) {
+        CoreTypeResolverRegistry.INSTANCE.register(resolver);
         return this;
     }
-    
+
     public <T> JsonConfigBuilder addTypeSupplier(Class<T> type, ContextDynamicTypeSupplier<? extends T> supplier) {
         ResolverRegistry.registerSupplier(type, supplier);
         return this;

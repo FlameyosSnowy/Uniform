@@ -1,5 +1,6 @@
 package me.flame.uniform.json;
 
+import me.flame.uniform.json.dom.JsonArray;
 import me.flame.uniform.json.dom.JsonObject;
 import me.flame.uniform.json.dom.JsonValue;
 import me.flame.uniform.json.exceptions.JsonException;
@@ -10,6 +11,8 @@ import me.flame.uniform.json.parser.JsonCursors;
 import me.flame.uniform.json.parser.lowlevel.JsonCursor;
 import me.flame.uniform.json.parser.lowlevel.JsonDomCursor;
 import me.flame.uniform.json.parser.lowlevel.MapJsonCursor;
+import me.flame.uniform.json.resolvers.CoreTypeResolver;
+import me.flame.uniform.json.resolvers.CoreTypeResolverRegistry;
 import me.flame.uniform.json.writers.JsonDomBuilder;
 import me.flame.uniform.json.writers.JsonDomWriter;
 import me.flame.uniform.json.writers.JsonWriter;
@@ -17,11 +20,19 @@ import me.flame.uniform.json.writers.JsonWriterFactory;
 import me.flame.uniform.json.writers.JsonWriterOptions;
 
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
+import java.util.Queue;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ForkJoinPool;
@@ -171,26 +182,129 @@ public record JsonAdapter(JsonConfig config, Executor executor) {
     }
 
     /**
-     * Converts a {@link JsonObject} DOM tree to an instance of {@code type} by running
-     * the registered {@link me.flame.uniform.json.mappers.JsonMapper} for {@code T}
-     * against a {@link JsonDomCursor} instead of a byte-array cursor.
+     * Converts any supported {@link JsonValue} to an instance of {@code type}.
      *
-     * @param tree the DOM tree to convert - must not be {@code null}
-     * @param type the target class; a {@code JsonMapper<T>} must be registered
+     * <p>Resolution order:
+     * <ol>
+     *   <li>Consult {@link CoreTypeResolverRegistry#INSTANCE} — covers all primitives,
+     *       wrappers, {@link String}, {@link java.math.BigInteger}, {@link java.math.BigDecimal},
+     *       {@link java.util.UUID}, {@link java.net.URI}/{@link java.net.URL},
+     *       {@link java.nio.file.Path}, all {@code java.time.*} types, and any
+     *       custom {@link CoreTypeResolver} registered by the caller.</li>
+     *   <li>Fall through to the mapper registry for {@code @SerializedObject}-annotated
+     *       POJOs — {@code tree} must be a {@link JsonObject} in that case.</li>
+     * </ol>
+     *
+     * <p>For collections use {@link #treeToList}, {@link #treeToSet},
+     * {@link #treeToQueue}, or {@link #treeToMap} — generic element types are erased
+     * at runtime so they need their own overloads.
+     *
+     * @param tree the DOM node to convert
+     * @param type the target class
      * @param <T>  the target type
-     * @return a fully populated instance of {@code T}
-     * @throws IllegalStateException if no reader is registered for {@code type}
+     * @return a fully populated instance of {@code T}, or {@code null} if {@code tree}
+     *         is {@link me.flame.uniform.json.dom.JsonNull}
+     * @throws IllegalStateException    if no resolver or mapper is registered for {@code type}
+     * @throws IllegalArgumentException if the node cannot be converted to {@code type}
      */
     @SuppressWarnings("unchecked")
-    public <T> @NotNull T treeToValue(@NotNull JsonObject tree, @NotNull Class<T> type) {
+    public <T> @Nullable T treeToValue(@NotNull JsonValue tree, @NotNull Class<T> type) {
+        CoreTypeResolver<T> coreResolver = CoreTypeResolverRegistry.INSTANCE.resolve(type);
+        if (coreResolver != null) {
+            T result = coreResolver.resolve(tree);
+            return result != null ? result : defaultForType(type);
+        }
+
+        if (!(tree instanceof JsonObject obj))
+            throw new IllegalStateException(
+                "Cannot map " + tree.getClass().getSimpleName() + " to " + type.getName()
+                    + " — expected a JsonObject. If this is a custom type, register a "
+                    + "CoreTypeResolver via CoreTypeResolverRegistry.INSTANCE.register(...).");
+
         JsonMapper<T> mapper = (JsonMapper<T>) JsonMapperRegistry.getReader(type);
         if (mapper == null)
             throw new IllegalStateException("No JsonMapper registered for " + type.getName()
-                + ". Ensure the class is annotated with @SerializedObject and was processed by the annotation processor.");
+                + ". Ensure the class is annotated with @SerializedObject and was processed "
+                + "by the annotation processor, or register a CoreTypeResolver for it.");
 
-        JsonDomCursor cursor = new JsonDomCursor(tree);
-        return mapper.map(cursor);
+        return mapper.map(new JsonDomCursor(obj));
     }
+
+    /**
+     * Converts a {@link JsonArray} to a {@link java.util.List} whose elements are
+     * each converted to {@code elementType} via {@link #treeToValue}.
+     */
+    public <E> @NotNull List<E> treeToList(
+        @NotNull JsonArray array,
+        @NotNull Class<E> elementType) {
+        List<E> result = new ArrayList<>(array.size());
+        for (int i = 0; i < array.size(); i++) {
+            result.add(treeToValue(array.getRaw(i), elementType));
+        }
+        return result;
+    }
+
+    /**
+     * Converts a {@link JsonArray} to an insertion-ordered {@link java.util.Set}
+     * whose elements are each converted to {@code elementType} via {@link #treeToValue}.
+     */
+    public <E> @NotNull Set<E> treeToSet(
+        @NotNull JsonArray array,
+        @NotNull Class<E> elementType) {
+        Set<E> result = new LinkedHashSet<>(array.size() * 2);
+        for (int i = 0; i < array.size(); i++) {
+            result.add(treeToValue(array.getRaw(i), elementType));
+        }
+        return result;
+    }
+
+    /**
+     * Converts a {@link JsonArray} to a {@link java.util.Queue} whose elements are
+     * each converted to {@code elementType} via {@link #treeToValue}.
+     */
+    public <E> @NotNull Queue<E> treeToQueue(
+        @NotNull JsonArray array,
+        @NotNull Class<E> elementType) {
+        java.util.ArrayDeque<E> result = new ArrayDeque<>(array.size());
+        for (int i = 0; i < array.size(); i++) {
+            result.add(treeToValue(array.getRaw(i), elementType));
+        }
+        return result;
+    }
+
+    /**
+     * Converts a {@link JsonObject} to a {@link java.util.Map} with {@link String}
+     * keys and values converted to {@code valueType} via {@link #treeToValue}.
+     */
+    public <V> @NotNull Map<String, V> treeToMap(
+        @NotNull JsonObject obj,
+        @NotNull Class<V> valueType) {
+        Map<String, V> result = new LinkedHashMap<>(obj.size() * 2);
+        for (Map.Entry<String, JsonValue> entry : obj) {
+            result.put(entry.getKey(), treeToValue(entry.getValue(), valueType));
+        }
+        return result;
+    }
+
+    /**
+     * Returns the zero/false/null default for primitive types when a resolver
+     * returns {@code null} (e.g. the DOM node was {@code JsonNull}).
+     * For reference types, {@code null} is returned as-is.
+     */
+    @SuppressWarnings("unchecked")
+    @Nullable
+    private static <T> T defaultForType(@NotNull Class<T> type) {
+        if (type == int.class     || type == Integer.class)  return (T) (Integer) 0;
+        if (type == long.class    || type == Long.class)     return (T) (Long)    0L;
+        if (type == double.class  || type == Double.class)   return (T) (Double)  0.0;
+        if (type == float.class   || type == Float.class)    return (T) (Float)   0.0f;
+        if (type == short.class   || type == Short.class)    return (T) (Short)   (short) 0;
+        if (type == byte.class    || type == Byte.class)     return (T) (Byte)    (byte)  0;
+        if (type == boolean.class || type == Boolean.class)  return (T) Boolean.FALSE;
+        if (type == char.class    || type == Character.class)return (T) (Character) '\0';
+        return null;
+    }
+
 
     /**
      * Asynchronously serializes {@code value} to a JSON string.

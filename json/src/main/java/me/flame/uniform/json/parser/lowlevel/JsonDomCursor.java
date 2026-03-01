@@ -15,6 +15,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
+import static me.flame.uniform.json.resolvers.CoreTypeResolverRegistry.*;
+
 /**
  * A {@link JsonReadCursor} that walks a {@link JsonValue} DOM tree instead of a raw
  * byte array. Passed to existing {@link me.flame.uniform.json.mappers.JsonMapper}
@@ -189,65 +191,12 @@ public final class JsonDomCursor implements JsonReadCursor {
         return v != null ? v : JsonNull.INSTANCE;
     }
 
-    private @NotNull JsonValue currentElement() {
+    public @NotNull JsonValue currentElement() {
         if (!(node instanceof JsonArray arr))
             throw new IllegalStateException("Not in array context");
         if (arrayIndex < 0 || arrayIndex >= arr.size())
             throw new IllegalStateException("No current element - call nextElement() first");
         JsonValue v = arr.getRaw(arrayIndex);
         return v;
-    }
-
-    private static int coerceToInt(@NotNull JsonValue v) {
-        if (v instanceof JsonNumber n) {
-            return n.intValue();
-        } else if (v instanceof JsonString s) {
-            return Integer.parseInt(s.value());
-        } else if (v instanceof JsonBoolean b) {
-            return b.value() ? 1 : 0;
-        }
-        return 0;
-    }
-
-    private static long coerceToLong(@NotNull JsonValue v) {
-        if (v instanceof JsonNumber n) {
-            return n.longValue();
-        } else if (v instanceof JsonString s) {
-            return Long.parseLong(s.value());
-        } else if (v instanceof JsonBoolean b) {
-            return b.value() ? 1L : 0L;
-        }
-        return 0L;
-    }
-
-    private static double coerceToDouble(@NotNull JsonValue v) {
-        if (v instanceof JsonNumber n) {
-            return n.doubleValue();
-        } else if (v instanceof JsonString s) {
-            return Double.parseDouble(s.value());
-        } else if (v instanceof JsonBoolean b) {
-            return b.value() ? 1.0 : 0.0;
-        }
-        return 0.0;
-    }
-
-    private static boolean coerceToBool(@NotNull JsonValue v) {
-        if (v instanceof JsonBoolean b) {
-            return b.value();
-        } else if (v instanceof JsonNumber n) {
-            return n.intValue() != 0;
-        } else if (v instanceof JsonString s) {
-            return Boolean.parseBoolean(s.value());
-        }
-        return false;
-    }
-
-    private static @NotNull String coerceToString(@NotNull JsonValue v) {
-        if (v instanceof JsonString s) {
-            return s.value();
-        } else if (v instanceof JsonNull) {
-            return "";
-        }
-        return v.toString();
     }
 }
