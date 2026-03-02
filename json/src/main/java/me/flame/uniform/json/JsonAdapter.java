@@ -55,7 +55,7 @@ public record JsonAdapter(JsonConfig config, Executor executor) {
         JsonMapperRegistry.applyConfig(config);
     }
 
-    public static JsonConfigBuilder builder() {
+    public static JsonConfigBuilder configBuilder() {
         return new JsonConfigBuilder();
     }
 
@@ -231,7 +231,7 @@ public record JsonAdapter(JsonConfig config, Executor executor) {
     public <T> @Nullable T treeToValue(@NotNull JsonValue tree, @NotNull Class<T> type) {
         CoreTypeResolver<T> coreResolver = CoreTypeResolverRegistry.INSTANCE.resolve(type);
         if (coreResolver != null) {
-            T result = coreResolver.resolve(tree);
+            T result = coreResolver.deserialize(tree);
             return result != null ? result : defaultForType(type);
         }
 

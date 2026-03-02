@@ -1,10 +1,18 @@
 package me.flame.uniform.json.resolvers;
 
 import me.flame.uniform.json.dom.JsonBoolean;
+import me.flame.uniform.json.dom.JsonByte;
+import me.flame.uniform.json.dom.JsonDouble;
+import me.flame.uniform.json.dom.JsonFloat;
+import me.flame.uniform.json.dom.JsonInteger;
+import me.flame.uniform.json.dom.JsonLong;
 import me.flame.uniform.json.dom.JsonNull;
+import me.flame.uniform.json.dom.JsonBoolean;
 import me.flame.uniform.json.dom.JsonNumber;
+import me.flame.uniform.json.dom.JsonShort;
 import me.flame.uniform.json.dom.JsonString;
 import me.flame.uniform.json.dom.JsonValue;
+import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -22,18 +30,18 @@ import java.time.OffsetDateTime;
 import java.time.Period;
 import java.time.ZonedDateTime;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Function;
 
 /**
- * Registry of {@link CoreTypeResolver} instances used by
- * {@code JsonAdapter.treeToValue(JsonValue, Class)} to convert DOM nodes to
- * Java types without going through the mapper/codegen registry.
+ * Registry of {@link CoreTypeResolver} instances — the single source of truth for
+ * all {@link JsonValue} ↔ Java type conversions outside of generated POJO mappers.
  *
  * <h3>Built-in resolvers</h3>
- * Registered automatically at construction time:
  * <ul>
- *   <li>All primitives and their wrappers</li>
+ *   <li>All primitives and their wrappers (including {@code char}/{@code Character})</li>
  *   <li>{@link String}</li>
  *   <li>{@link BigInteger}, {@link BigDecimal}</li>
  *   <li>{@link UUID}</li>
@@ -42,11 +50,14 @@ import java.util.concurrent.ConcurrentHashMap;
  *   <li>Java Time: {@link LocalDate}, {@link LocalTime}, {@link LocalDateTime},
  *       {@link ZonedDateTime}, {@link OffsetDateTime}, {@link Instant},
  *       {@link Duration}, {@link Period}</li>
+ *   <li>Any {@link Enum} subtype (by name, via assignable scan)</li>
  * </ul>
  *
  * <h3>Custom resolvers</h3>
- * Call {@link #register(CoreTypeResolver)} before the first {@code treeToValue} call.
- * Custom resolvers override built-ins for the same type.
+ * <pre>{@code
+ * CoreTypeResolverRegistry.INSTANCE.register(new MyTypeResolver());
+ * }</pre>
+ * Custom resolvers override built-ins for the same type. Call before first use.
  */
 public final class CoreTypeResolverRegistry {
 
@@ -55,28 +66,21 @@ public final class CoreTypeResolverRegistry {
 
     @SuppressWarnings("rawtypes")
     private static final CoreTypeResolver NULL_MARKER = new CoreTypeResolver<>() {
-        @Override public @NotNull Class<Object> getType() { return Object.class; }
-        @Override public @Nullable Object resolve(@NotNull JsonValue value) { return null; }
+        @Override public @NotNull Class<Object> getType()                      { return Object.class; }
+        @Override public @Nullable Object deserialize(@NotNull JsonValue value) { return null; }
+        @Override public @NotNull JsonValue serialize(@NotNull Object value)    { return JsonNull.INSTANCE; }
     };
 
-    private final Map<Class<?>, CoreTypeResolver<?>> resolvers        = new ConcurrentHashMap<>(32);
-    private final Map<Class<?>, CoreTypeResolver<?>> assignableCache  = new ConcurrentHashMap<>(16);
-
-    // -------------------------------------------------------------------------
-    // Construction
-    // -------------------------------------------------------------------------
+    private final Map<Class<?>, CoreTypeResolver<?>> resolvers       = new ConcurrentHashMap<>(32);
+    private final Map<Class<?>, CoreTypeResolver<?>> assignableCache = new ConcurrentHashMap<>(16);
 
     private CoreTypeResolverRegistry() {
         registerDefaults();
     }
 
-    // -------------------------------------------------------------------------
-    // Public API
-    // -------------------------------------------------------------------------
-
     /**
-     * Registers a custom resolver, replacing any existing one for the same type.
-     * Clears the assignable cache so subtype lookups are re-evaluated.
+     * Registers a custom {@link CoreTypeResolver}, replacing any existing one for
+     * the same type. Clears the assignable cache so subtype lookups re-evaluate.
      */
     public <T> void register(@NotNull CoreTypeResolver<T> resolver) {
         resolvers.put(resolver.getType(), resolver);
@@ -84,175 +88,201 @@ public final class CoreTypeResolverRegistry {
     }
 
     /**
-     * Looks up the resolver for {@code type}, checking the exact type first,
-     * then walking registered resolvers for an assignable match (e.g. an enum
-     * resolver registered for {@code Enum.class} will match any concrete enum).
+     * Looks up the resolver for {@code type}.
+     *
+     * <p>Resolution order:
+     * <ol>
+     *   <li>Exact type match</li>
+     *   <li>Assignable cache (previously resolved supertypes)</li>
+     *   <li>Enum shortcut (any {@link Enum} subtype)</li>
+     *   <li>Assignable scan across all registered resolvers</li>
+     *   <li>Negative cache (returns {@code null}, avoids re-scanning)</li>
+     * </ol>
      *
      * @return the resolver, or {@code null} if none is registered
      */
     @SuppressWarnings("unchecked")
     public <T> @Nullable CoreTypeResolver<T> resolve(@NotNull Class<T> type) {
-        // 1. Direct hit
         CoreTypeResolver<?> direct = resolvers.get(type);
-        if (direct != null && direct != NULL_MARKER) return (CoreTypeResolver<T>) direct;
         if (direct == NULL_MARKER) return null;
+        if (direct != null)        return (CoreTypeResolver<T>) direct;
 
-        // 2. Assignable cache
         CoreTypeResolver<?> cached = assignableCache.get(type);
-        if (cached != null && cached != NULL_MARKER) return (CoreTypeResolver<T>) cached;
         if (cached == NULL_MARKER) return null;
+        if (cached != null)        return (CoreTypeResolver<T>) cached;
 
-        // 3. Enum shortcut
         if (type.isEnum()) {
-            CoreTypeResolver<T> enumResolver = enumResolver(type);
+            CoreTypeResolver<T> enumResolver = buildEnumResolver(type);
             resolvers.put(type, enumResolver);
             return enumResolver;
         }
 
-        // 4. Assignable scan
         for (Map.Entry<Class<?>, CoreTypeResolver<?>> entry : resolvers.entrySet()) {
             if (entry.getKey().isAssignableFrom(type)) {
-                assignableCache.put(type, entry.getValue());
-                return (CoreTypeResolver<T>) entry.getValue();
+                CoreTypeResolver<?> found = entry.getValue();
+                assignableCache.put(type, found);
+                return (CoreTypeResolver<T>) found;
             }
         }
 
-        // 5. Negative cache
         assignableCache.put(type, NULL_MARKER);
         return null;
     }
 
+    /** Returns {@code true} if a resolver is registered for {@code type}. */
     public boolean has(@NotNull Class<?> type) {
         return resolve(type) != null;
     }
 
-    // -------------------------------------------------------------------------
-    // Default registrations
-    // -------------------------------------------------------------------------
-
     private void registerDefaults() {
-        // Primitives & String
-        put(String.class, CoreTypeResolverRegistry::coerceToString);
-        put(int.class, CoreTypeResolverRegistry::coerceToInt);
-        put(Integer.class, CoreTypeResolverRegistry::coerceToInt);
-        put(long.class, CoreTypeResolverRegistry::coerceToLong);
-        put(Long.class, CoreTypeResolverRegistry::coerceToLong);
-        put(double.class, CoreTypeResolverRegistry::coerceToDouble);
-        put(Double.class, CoreTypeResolverRegistry::coerceToDouble);
-        put(float.class, CoreTypeResolverRegistry::coerceToFloat);
-        put(Float.class, CoreTypeResolverRegistry::coerceToFloat);
-        put(short.class, CoreTypeResolverRegistry::coerceToShort);
-        put(Short.class, CoreTypeResolverRegistry::coerceToShort);
-        put(byte.class, CoreTypeResolverRegistry::coerceToByte);
-        put(Byte.class, CoreTypeResolverRegistry::coerceToByte);
-        put(boolean.class, CoreTypeResolverRegistry::coerceToBool);
-        put(Boolean.class, CoreTypeResolverRegistry::coerceToBool);
-        put(char.class, CoreTypeResolverRegistry::coerceToChar);
-        put(Character.class, CoreTypeResolverRegistry::coerceToChar);
+        register(String.class,
+            v -> v instanceof JsonString s ? s.value() : v instanceof JsonNull ? null : v.toString(),
+            JsonString::new);
 
-        // Big numbers
-        put(BigInteger.class, v -> {
-            if (v instanceof JsonNull) return null;
-            if (v instanceof JsonNumber n) return BigInteger.valueOf(n.longValue());
-            if (v instanceof JsonString s) return new BigInteger(s.value());
-            throw bad(v, BigInteger.class);
-        });
-        put(BigDecimal.class, v -> {
-            if (v instanceof JsonNull) return null;
-            if (v instanceof JsonNumber n) return BigDecimal.valueOf(n.doubleValue());
-            if (v instanceof JsonString s) return new BigDecimal(s.value());
-            throw bad(v, BigDecimal.class);
-        });
+        register(int.class, CoreTypeResolverRegistry::coerceInt, JsonInteger::new);
+        register(Integer.class, CoreTypeResolverRegistry::coerceInt, JsonInteger::new);
+        register(long.class, CoreTypeResolverRegistry::coerceLong, JsonLong::new);
+        register(Long.class, CoreTypeResolverRegistry::coerceLong, JsonLong::new);
+        register(double.class, CoreTypeResolverRegistry::coerceDouble, JsonDouble::new);
+        register(Double.class, CoreTypeResolverRegistry::coerceDouble, JsonDouble::new);
+        register(float.class, CoreTypeResolverRegistry::coerceFloat, JsonFloat::new);
+        register(Float.class, CoreTypeResolverRegistry::coerceFloat, JsonFloat::new);
+        register(short.class, CoreTypeResolverRegistry::coerceShort, JsonShort::new);
+        register(Short.class, CoreTypeResolverRegistry::coerceShort, JsonShort::new);
+        register(byte.class, CoreTypeResolverRegistry::coerceByte, JsonByte::new);
+        register(Byte.class, CoreTypeResolverRegistry::coerceByte, JsonByte::new);
+        register(boolean.class, CoreTypeResolverRegistry::coerceBool,   JsonBoolean::of);
+        register(Boolean.class, CoreTypeResolverRegistry::coerceBool,   JsonBoolean::of);
+        register(char.class, CoreTypeResolverRegistry::coerceChar, v -> new JsonString(String.valueOf(v)));
+        register(Character.class, CoreTypeResolverRegistry::coerceChar, v -> new JsonString(String.valueOf(v)));
 
-        // UUID
-        put(UUID.class, v -> {
-            if (v instanceof JsonNull) return null;
-            if (v instanceof JsonString s) return UUID.fromString(s.value());
-            throw bad(v, UUID.class);
-        });
+        register(BigInteger.class,
+            v -> {
+                if (Objects.requireNonNull(v) instanceof JsonNull) {
+                    return null;
+                } else if (v instanceof JsonNumber n) {
+                    return BigInteger.valueOf(n.longValue());
+                } else if (v instanceof JsonString s) {
+                    return new BigInteger(s.value());
+                }
+                return bad(v, BigInteger.class);
+            },
+            v -> new JsonString(v.toString()));
 
-        // Network
-        put(URI.class, v -> {
-            if (v instanceof JsonNull) return null;
-            if (v instanceof JsonString s) return URI.create(s.value());
-            throw bad(v, URI.class);
-        });
-        put(URL.class, v -> {
-            if (v instanceof JsonNull) return null;
-            if (v instanceof JsonString s) { try { return URI.create(s.value()).toURL(); } catch (Exception e) { throw new RuntimeException(e); } }
-            throw bad(v, URL.class);
-        });
+        register(BigDecimal.class,
+            v -> {
+                if (Objects.requireNonNull(v) instanceof JsonNull) {
+                    return null;
+                } else if (v instanceof JsonNumber n) {
+                    return BigDecimal.valueOf(n.doubleValue());
+                } else if (v instanceof JsonString s) {
+                    return new BigDecimal(s.value());
+                }
+                return bad(v, BigDecimal.class);
+            },
+            v -> new JsonString(v.toPlainString()));
 
-        // File system
-        put(Path.class, v -> {
-            if (v instanceof JsonNull) return null;
-            if (v instanceof JsonString s) return Path.of(s.value());
-            throw bad(v, Path.class);
-        });
+        register(UUID.class,
+            v -> v instanceof JsonNull ? null : UUID.fromString(requireString(v, UUID.class)),
+            v -> new JsonString(v.toString()));
 
-        // Java Time
-        put(LocalDate.class,      v -> v instanceof JsonNull ? null : LocalDate.parse(requireString(v, LocalDate.class)));
-        put(LocalTime.class,      v -> v instanceof JsonNull ? null : LocalTime.parse(requireString(v, LocalTime.class)));
-        put(LocalDateTime.class,  v -> v instanceof JsonNull ? null : LocalDateTime.parse(requireString(v, LocalDateTime.class)));
-        put(ZonedDateTime.class,  v -> v instanceof JsonNull ? null : ZonedDateTime.parse(requireString(v, ZonedDateTime.class)));
-        put(OffsetDateTime.class, v -> v instanceof JsonNull ? null : OffsetDateTime.parse(requireString(v, OffsetDateTime.class)));
-        put(Instant.class,        v -> {
-            if (v instanceof JsonNull) return null;
-            if (v instanceof JsonNumber n) return Instant.ofEpochMilli(n.longValue());
-            if (v instanceof JsonString s) return Instant.parse(s.value());
-            throw bad(v, Instant.class);
-        });
-        put(Duration.class, v -> {
-            if (v instanceof JsonNull) return null;
-            if (v instanceof JsonNumber n) return Duration.ofMillis(n.longValue());
-            if (v instanceof JsonString s) return Duration.parse(s.value());
-            throw bad(v, Duration.class);
-        });
-        put(Period.class, v -> {
-            if (v instanceof JsonNull) return null;
-            if (v instanceof JsonString s) return Period.parse(s.value());
-            throw bad(v, Period.class);
-        });
+        register(URI.class,
+            v -> v instanceof JsonNull ? null : URI.create(requireString(v, URI.class)),
+            v -> new JsonString(v.toString()));
+
+        register(URL.class,
+            v -> {
+                if (v instanceof JsonNull) return null;
+                try { return URI.create(requireString(v, URL.class)).toURL(); }
+                catch (Exception e) { throw new RuntimeException(e); }
+            },
+            v -> new JsonString(v.toString()));
+
+        register(Path.class,
+            v -> v instanceof JsonNull ? null : Path.of(requireString(v, Path.class)),
+            v -> new JsonString(v.toString()));
+
+        registerIso(LocalDate.class,     LocalDate::parse,     Object::toString);
+        registerIso(LocalTime.class,     LocalTime::parse,     Object::toString);
+        registerIso(LocalDateTime.class, LocalDateTime::parse, Object::toString);
+        registerIso(ZonedDateTime.class, ZonedDateTime::parse, Object::toString);
+        registerIso(OffsetDateTime.class,OffsetDateTime::parse,Object::toString);
+        registerIso(Period.class,        Period::parse,        Object::toString);
+
+        register(Instant.class,
+            v -> {
+                if (Objects.requireNonNull(v) instanceof JsonNull) {
+                    return null;
+                } else if (v instanceof JsonNumber n) {
+                    return Instant.ofEpochMilli(n.longValue());
+                } else if (v instanceof JsonString s) {
+                    return Instant.parse(s.value());
+                }
+                return bad(v, Instant.class);
+            },
+            v -> new JsonString(v.toString()));
+
+        register(Duration.class,
+            v -> {
+                if (Objects.requireNonNull(v) instanceof JsonNull) {
+                    return null;
+                } else if (v instanceof JsonNumber n) {
+                    return Duration.ofMillis(n.longValue());
+                } else if (v instanceof JsonString s) {
+                    return Duration.parse(s.value());
+                }
+                return bad(v, Duration.class);
+            },
+            v -> new JsonLong(v.toMillis()));
     }
 
-    // -------------------------------------------------------------------------
-    // Internal helpers
-    // -------------------------------------------------------------------------
-
-    /** Shorthand for anonymous inline resolver registration. */
-    private <T> void put(@NotNull Class<T> type, @NotNull CoreTypeResolver<T> resolver) {
-        resolvers.put(type, resolver);
-    }
-
-    /** Creates an anonymous {@link CoreTypeResolver} from a lambda, binding the type. */
-    private <T> void put(@NotNull Class<T> type, @NotNull java.util.function.Function<JsonValue, T> fn) {
+    /**
+     * Registers a resolver from a deserialize + serialize function pair.
+     * Avoids having to write the full interface for every built-in.
+     */
+    private <T> void register(
+        @NotNull Class<T> type,
+        @NotNull Function<JsonValue, T> deserialize,
+        @NotNull Function<T, JsonValue> serialize) {
         resolvers.put(type, new CoreTypeResolver<T>() {
-            @Override public @NotNull Class<T> getType() { return type; }
-            @Override public @Nullable T resolve(@NotNull JsonValue value) { return fn.apply(value); }
+            @Override public @NotNull Class<T>    getType()                        { return type; }
+            @Override public @Nullable T          deserialize(@NotNull JsonValue v) { return deserialize.apply(v); }
+            @Override public @NotNull  JsonValue  serialize(@NotNull T v)           { return serialize.apply(v); }
         });
     }
 
-    @SuppressWarnings("unchecked")
-    private static <T> @NotNull CoreTypeResolver<T> enumResolver(@NotNull Class<T> type) {
-        return new CoreTypeResolver<>() {
+    /** Shorthand for types that round-trip through an ISO string. */
+    private <T> void registerIso(
+        @NotNull Class<T> type,
+        @NotNull Function<String, T> fromString,
+        @NotNull Function<T, String> toString) {
+        register(type,
+            v -> v instanceof JsonNull ? null : fromString.apply(requireString(v, type)),
+            v -> new JsonString(toString.apply(v)));
+    }
+
+    private static <T> @NotNull CoreTypeResolver<T> buildEnumResolver(@NotNull Class<T> type) {
+        return new CoreTypeResolver<T>() {
+            @Override public @NotNull Class<T> getType() { return type; }
+
             @Override
-            public @NotNull Class<T> getType() {
-                return type;
+            public @Nullable T deserialize(@NotNull JsonValue value) {
+                if (value instanceof JsonNull) return null;
+                String name = requireString(value, type);
+                for (T c : type.getEnumConstants()) {
+                    if (((Enum<?>) c).name().equals(name)) return c;
+                }
+                throw new IllegalArgumentException("No enum constant " + type.getName() + "." + name);
             }
 
             @Override
-            public @Nullable T resolve(@NotNull JsonValue value) {
-                if (value instanceof JsonNull) return null;
-                String name = requireString(value, type);
-                for (T constant : type.getEnumConstants()) {
-                    if (((Enum<?>) constant).name().equals(name)) return constant;
-                }
-                throw new IllegalArgumentException("No enum constant " + type.getName() + "." + name);
+            public @NotNull JsonValue serialize(@NotNull T value) {
+                return new JsonString(((Enum<?>) value).name());
             }
         };
     }
 
-    public static int coerceToInt(@NotNull JsonValue v) {
+    static int coerceInt(@NotNull JsonValue v) {
         if (v instanceof JsonNumber n) {
             return n.intValue();
         } else if (v instanceof JsonString s) {
@@ -263,29 +293,7 @@ public final class CoreTypeResolverRegistry {
         return 0;
     }
 
-    public static short coerceToShort(@NotNull JsonValue v) {
-        if (v instanceof JsonNumber n) {
-            return n.shortValue();
-        } else if (v instanceof JsonString s) {
-            return Short.parseShort(s.value());
-        } else if (v instanceof JsonBoolean b) {
-            return (short) (b.value() ? 1 : 0);
-        }
-        return 0;
-    }
-
-    public static byte coerceToByte(@NotNull JsonValue v) {
-        if (v instanceof JsonNumber n) {
-            return n.byteValue();
-        } else if (v instanceof JsonString s) {
-            return Byte.parseByte(s.value());
-        } else if (v instanceof JsonBoolean b) {
-            return (byte) (b.value() ? 1 : 0);
-        }
-        return 0;
-    }
-
-    public static long coerceToLong(@NotNull JsonValue v) {
+    static long coerceLong(@NotNull JsonValue v) {
         if (v instanceof JsonNumber n) {
             return n.longValue();
         } else if (v instanceof JsonString s) {
@@ -296,7 +304,7 @@ public final class CoreTypeResolverRegistry {
         return 0L;
     }
 
-    public static double coerceToDouble(@NotNull JsonValue v) {
+    static double coerceDouble(@NotNull JsonValue v) {
         if (v instanceof JsonNumber n) {
             return n.doubleValue();
         } else if (v instanceof JsonString s) {
@@ -307,7 +315,7 @@ public final class CoreTypeResolverRegistry {
         return 0.0;
     }
 
-    public static float coerceToFloat(@NotNull JsonValue v) {
+    static float coerceFloat(@NotNull JsonValue v) {
         if (v instanceof JsonNumber n) {
             return n.floatValue();
         } else if (v instanceof JsonString s) {
@@ -318,7 +326,29 @@ public final class CoreTypeResolverRegistry {
         return 0.0f;
     }
 
-    public static boolean coerceToBool(@NotNull JsonValue v) {
+    static short coerceShort(@NotNull JsonValue v) {
+        if (v instanceof JsonNumber n) {
+            return n.shortValue();
+        } else if (v instanceof JsonString s) {
+            return Short.parseShort(s.value());
+        } else if (v instanceof JsonBoolean b) {
+            return (short) (b.value() ? 1 : 0);
+        }
+        return (short) 0;
+    }
+
+    static byte coerceByte(@NotNull JsonValue v) {
+        if (v instanceof JsonNumber n) {
+            return n.byteValue();
+        } else if (v instanceof JsonString s) {
+            return Byte.parseByte(s.value());
+        } else if (v instanceof JsonBoolean b) {
+            return (byte) (b.value() ? 1 : 0);
+        }
+        return (byte) 0;
+    }
+
+    static boolean coerceBool(@NotNull JsonValue v) {
         if (v instanceof JsonBoolean b) {
             return b.value();
         } else if (v instanceof JsonNumber n) {
@@ -329,28 +359,21 @@ public final class CoreTypeResolverRegistry {
         return false;
     }
 
-    public static @NotNull String coerceToString(@NotNull JsonValue v) {
-        if (v instanceof JsonString s) {
-            return s.value();
-        } else if (v instanceof JsonNull) {
-            return "";
-        }
-        return v.toString();
-    }
-
-    static char coerceToChar(@NotNull JsonValue v) {
+    static char coerceChar(@NotNull JsonValue v) {
         if (v instanceof JsonString s && !s.value().isEmpty()) return s.value().charAt(0);
-        if (v instanceof JsonNumber n) return (char) n.intValue();
+        if (v instanceof me.flame.uniform.json.dom.JsonNumber n) return (char) n.intValue();
         return '\0';
     }
 
     private static @NotNull String requireString(@NotNull JsonValue v, @NotNull Class<?> target) {
         if (v instanceof JsonString s) return s.value();
-        throw bad(v, target);
+        return bad(v, target);
     }
 
-    private static @NotNull IllegalArgumentException bad(@NotNull JsonValue v, @NotNull Class<?> target) {
-        return new IllegalArgumentException(
+    /** Always throws — used as an expression in switch arms that need a return type. */
+    @Contract("_, _ -> fail")
+    private static <T> T bad(@NotNull JsonValue v, @NotNull Class<?> target) {
+        throw new IllegalArgumentException(
             "Cannot convert " + v.getClass().getSimpleName() + " to " + target.getName());
     }
 }
