@@ -7,6 +7,7 @@ import me.flame.turboscanner.VectorByteScanner;
 import me.flame.uniform.json.exceptions.Exceptions;
 import me.flame.uniform.json.exceptions.JsonException;
 import me.flame.uniform.json.JsonConfig;
+import org.jetbrains.annotations.NotNull;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
@@ -33,7 +34,7 @@ public final class JsonFormatter {
 
     public ByteBuffer format(ByteBuffer buffer) {
         final byte[]              input  = toArray(buffer);
-        final List<JsonException> errors = new ArrayList<>();
+        final List<JsonException> errors = new ArrayList<>(8);
 
         utf8Validator.reset();
         utf8Validator.validate(input, 0, input.length);
@@ -117,7 +118,7 @@ public final class JsonFormatter {
         return new JsonException(message + " at line " + line + ", column " + col + suffix);
     }
 
-    private static byte[] toArray(ByteBuffer buffer) {
+    private static byte @NotNull [] toArray(@NotNull ByteBuffer buffer) {
         final byte[] arr;
 
         if (buffer.hasArray()) {

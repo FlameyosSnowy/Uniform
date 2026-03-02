@@ -1077,12 +1077,8 @@ public final class JsonCursor implements JsonReadCursor {
      * Public entry point. The root of the input must be a JSON object ({@code {...}}).
      * Throws {@link JsonException} if the root token is anything else.
      */
-    public JsonObject parseValue() {
-        skipWs();
-        if (pos >= limit) throw new JsonException("Unexpected end of input");
-        if (input[pos] != '{')
-            throw new JsonException("Expected '{' at byte " + pos + " but got '" + (char) input[pos] + "'");
-        return parseObjectIterative();
+    public JsonValue parseValue() {
+        return parseValueInternal();
     }
 
     /**

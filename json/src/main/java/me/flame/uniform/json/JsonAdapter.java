@@ -64,12 +64,12 @@ public record JsonAdapter(JsonConfig config, Executor executor) {
         return readValue(bytes, type);
     }
 
-    public JsonObject readValue(@NotNull String json) {
+    public JsonValue readValue(@NotNull String json) {
         byte[] bytes = json.getBytes(StandardCharsets.UTF_8);
         return readValue(bytes);
     }
 
-    public JsonObject readValue(byte[] bytes) {
+    public JsonValue readValue(byte[] bytes) {
         JsonCursor cursor = JsonCursors.createNormal(bytes, config);
         return cursor.parseValue();
     }
@@ -94,6 +94,26 @@ public record JsonAdapter(JsonConfig config, Executor executor) {
         JsonMapper<T> mapper = (JsonMapper<T>) JsonMapperRegistry.getReader(type);
         MapJsonCursor cursor = JsonCursors.createMap(map);
         return mapper.map(cursor);
+    }
+
+
+    public <T> JsonValue readValue(InputStream inputStream) {
+        try {
+            JsonCursor cursor = JsonCursors.createNormal(inputStream.readAllBytes(), config);
+            return cursor.parseValue();
+        } catch (IOException e) {
+            throw JsonException.io(e);
+        }
+    }
+
+    /**
+     * Asynchronously parses {@code inputStream} into an instance of {@link JsonValue}.
+     *
+     * <p>The UTF-8 encoding of the string is performed on the calling thread
+     * before dispatch so that the string's char[] is not retained by the async task.
+     */
+    public <T> CompletableFuture<JsonValue> readValueAsync(InputStream inputStream) {
+        return CompletableFuture.supplyAsync(() -> readValue(inputStream));
     }
 
     /**

@@ -1,5 +1,17 @@
 package me.flame.uniform.json.parser.lowlevel;
 
+import me.flame.uniform.json.dom.JsonArray;
+import me.flame.uniform.json.dom.JsonBoolean;
+import me.flame.uniform.json.dom.JsonByte;
+import me.flame.uniform.json.dom.JsonDouble;
+import me.flame.uniform.json.dom.JsonFloat;
+import me.flame.uniform.json.dom.JsonInteger;
+import me.flame.uniform.json.dom.JsonLong;
+import me.flame.uniform.json.dom.JsonNull;
+import me.flame.uniform.json.dom.JsonObject;
+import me.flame.uniform.json.dom.JsonShort;
+import me.flame.uniform.json.dom.JsonString;
+import me.flame.uniform.json.dom.JsonValue;
 import me.flame.uniform.json.parser.JsonReadCursor;
 import org.jetbrains.annotations.NotNull;
 
@@ -324,5 +336,66 @@ public final class MapJsonCursor implements JsonReadCursor {
     private static @NotNull ByteSlice toByteSlice(Object v) {
         byte[] bytes = toString(v).getBytes(StandardCharsets.UTF_8);
         return new ByteSlice(bytes, 0, bytes.length);
+    }
+
+
+    public @NotNull JsonValue fieldValueAsJsonValue() {
+        return toJsonValue(currentValue);
+    }
+
+    public @NotNull JsonValue elementValueAsJsonValue() {
+        return toJsonValue(currentElement);
+    }
+
+    private static @NotNull JsonValue toJsonValue(Object v) {
+        if (v == null) {
+            return JsonNull.INSTANCE;
+        } else if (v instanceof JsonValue jv) {
+            return jv;
+        } else if (v instanceof Boolean b) {
+            return JsonBoolean.of(b);
+        } else if (v instanceof Byte b) {
+            return new JsonByte(b);
+        } else if (v instanceof Short s) {
+            return new JsonShort(s);
+        } else if (v instanceof Integer i) {
+            return new JsonInteger(i);
+        } else if (v instanceof Long l) {
+            return new JsonLong(l);
+        } else if (v instanceof Float f) {
+            return new JsonFloat(f);
+        } else if (v instanceof Double d) {
+            return new JsonDouble(d);
+        } else if (v instanceof Number n) {
+            return new JsonDouble(n.doubleValue());
+            // BigDecimal etc.
+        } else if (v instanceof String s) {
+            return new JsonString(s);
+        } else if (v instanceof Map<?, ?> rawMap) {
+            return mapToJsonObject(rawMap);
+        } else if (v instanceof List<?> rawList) {
+            return listToJsonArray(rawList);
+        }
+        return new JsonString(v.toString());
+    }
+
+    @SuppressWarnings("unchecked")
+    private static @NotNull JsonObject mapToJsonObject(Map<?, ?> rawMap) {
+        Map<String, Object> map = (Map<String, Object>) rawMap;
+        JsonObject obj = new JsonObject();
+        for (Map.Entry<String, Object> entry : map.entrySet()) {
+            obj.put(entry.getKey(), toJsonValue(entry.getValue()));
+        }
+        return obj;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static @NotNull JsonArray listToJsonArray(List<?> rawList) {
+        List<Object> list = (List<Object>) rawList;
+        JsonArray arr = new JsonArray();
+        for (Object element : list) {
+            arr.add(toJsonValue(element));
+        }
+        return arr;
     }
 }

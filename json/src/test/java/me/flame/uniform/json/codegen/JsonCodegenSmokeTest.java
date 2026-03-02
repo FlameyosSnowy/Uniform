@@ -6,6 +6,7 @@ import me.flame.uniform.json.JsonConfig;
 import me.flame.uniform.json.codegen.fixtures.*;
 import me.flame.uniform.json.dom.JsonArray;
 import me.flame.uniform.json.dom.JsonObject;
+import me.flame.uniform.json.dom.JsonValue;
 import me.flame.uniform.json.writers.prettifiers.JsonFormatter;
 
 import org.junit.jupiter.api.Test;
@@ -42,15 +43,16 @@ public class JsonCodegenSmokeTest {
     void pojo_with_list_dom() {
         JsonAdapter adapter = new JsonAdapter(config());
 
-        JsonObject value = adapter.readValue(
+        JsonValue value = adapter.readValue(
             "{\"id\":10,\"items\":[{\"id\":1,\"name\":\"a\"},{\"id\":2,\"name\":\"b\"},{\"id\":3,\"name\":\"c\"}]}"
         );
 
         assertNotNull(value);
+        JsonObject object = (JsonObject) value;
         assertInstanceOf(JsonObject.class, value);
-        assertEquals(10, value.getInt("id"));
+        assertEquals(10, object.getInt("id"));
 
-        JsonArray items = value.getArray("items");
+        JsonArray items = object.getArray("items");
         assertEquals(3, items.size());
         assertEquals(1,   items.getObject(0).getInt("id"));
         assertEquals("a", items.getObject(0).getString("name"));
@@ -62,7 +64,7 @@ public class JsonCodegenSmokeTest {
     void deeply_nested_tree_dom() {
         JsonAdapter adapter = new JsonAdapter(config());
 
-        JsonObject value = adapter.readValue(
+        JsonValue value = adapter.readValue(
             "{\"id\":1,\"name\":\"root\",\"children\":[" +
                 "{\"id\":2,\"name\":\"child1\",\"children\":[]}," +
                 "{\"id\":3,\"name\":\"child2\",\"children\":[" +
@@ -72,10 +74,11 @@ public class JsonCodegenSmokeTest {
         );
 
         assertNotNull(value);
-        assertEquals(1,      value.getInt("id"));
-        assertEquals("root", value.getString("name"));
+        JsonObject object = (JsonObject) value;
+        assertEquals(1,      object.getInt("id"));
+        assertEquals("root", object.getString("name"));
 
-        JsonArray children = value.getArray("children");
+        JsonArray children = object.getArray("children");
         assertEquals(2, children.size());
         assertEquals("child1", children.getObject(0).getString("name"));
 
@@ -88,14 +91,15 @@ public class JsonCodegenSmokeTest {
     @Test
     void pojo_read_and_write_dom() {
         JsonAdapter adapter = new JsonAdapter(config());
-        JsonObject value = adapter.readValue("{\"id\":1,\"name\":\"a\"}");
+        JsonValue value = adapter.readValue("{\"id\":1,\"name\":\"a\"}");
 
         System.out.println(value);
 
         assertNotNull(value);
         assertInstanceOf(JsonObject.class, value);
-        assertEquals(1, value.getInt("id"));
-        assertEquals("a", value.getString("name"));
+        JsonObject object = (JsonObject) value;
+        assertEquals(1, object.getInt("id"));
+        assertEquals("a", object.getString("name"));
     }
 
     @Test
