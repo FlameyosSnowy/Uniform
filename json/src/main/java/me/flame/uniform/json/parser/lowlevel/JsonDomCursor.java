@@ -122,14 +122,14 @@ public final class JsonDomCursor implements JsonReadCursor {
         return new ByteSlice(bytes, 0, bytes.length);
     }
 
-    @Override public int     fieldValueAsInt()              { return coerceToInt(currentFieldValue()); }
-    @Override public long    fieldValueAsLong()             { return coerceToLong(currentFieldValue()); }
-    @Override public double  fieldValueAsDouble()           { return coerceToDouble(currentFieldValue()); }
-    @Override public float   fieldValueAsFloat()            { return (float) coerceToDouble(currentFieldValue()); }
-    @Override public short   fieldValueAsShort()            { return (short) coerceToInt(currentFieldValue()); }
-    @Override public byte    fieldValueAsByte()             { return (byte)  coerceToInt(currentFieldValue()); }
-    @Override public boolean fieldValueAsBoolean()          { return coerceToBool(currentFieldValue()); }
-    @Override public @NotNull String fieldValueAsUnquotedString() { return coerceToString(currentFieldValue()); }
+    @Override public int     fieldValueAsInt()              { return coerceInt(currentFieldValue()); }
+    @Override public long    fieldValueAsLong()             { return coerceLong(currentFieldValue()); }
+    @Override public double  fieldValueAsDouble()           { return coerceDouble(currentFieldValue()); }
+    @Override public float   fieldValueAsFloat()            { return (float) coerceDouble(currentFieldValue()); }
+    @Override public short   fieldValueAsShort()            { return (short) coerceInt(currentFieldValue()); }
+    @Override public byte    fieldValueAsByte()             { return (byte)  coerceInt(currentFieldValue()); }
+    @Override public boolean fieldValueAsBoolean()          { return coerceBool(currentFieldValue()); }
+    @Override public @NotNull String fieldValueAsUnquotedString() { return coerceString(currentFieldValue()); }
 
     @Override
     public @NotNull JsonDomCursor fieldValueCursor() {
@@ -160,23 +160,19 @@ public final class JsonDomCursor implements JsonReadCursor {
         return new ByteSlice(bytes, 0, bytes.length);
     }
 
-    @Override public int     elementValueAsInt()                  { return coerceToInt(currentElement()); }
-    @Override public long    elementValueAsLong()                 { return coerceToLong(currentElement()); }
-    @Override public double  elementValueAsDouble()               { return coerceToDouble(currentElement()); }
-    @Override public float   elementValueAsFloat()                { return (float) coerceToDouble(currentElement()); }
-    @Override public short   elementValueAsShort()                { return (short) coerceToInt(currentElement()); }
-    @Override public byte    elementValueAsByte()                 { return (byte)  coerceToInt(currentElement()); }
-    @Override public boolean elementValueAsBoolean()              { return coerceToBool(currentElement()); }
-    @Override public @NotNull String elementValueAsUnquotedString() { return coerceToString(currentElement()); }
+    @Override public int     elementValueAsInt()                  { return coerceInt(currentElement()); }
+    @Override public long    elementValueAsLong()                 { return coerceLong(currentElement()); }
+    @Override public double  elementValueAsDouble()               { return coerceDouble(currentElement()); }
+    @Override public float   elementValueAsFloat()                { return (float) coerceDouble(currentElement()); }
+    @Override public short   elementValueAsShort()                { return (short) coerceInt(currentElement()); }
+    @Override public byte    elementValueAsByte()                 { return (byte)  coerceInt(currentElement()); }
+    @Override public boolean elementValueAsBoolean()              { return coerceBool(currentElement()); }
+    @Override public @NotNull String elementValueAsUnquotedString() { return coerceString(currentElement()); }
 
     @Override
     public @NotNull JsonDomCursor elementValueCursor() {
         return new JsonDomCursor(currentElement());
     }
-
-    // -------------------------------------------------------------------------
-    // Current key / value helpers
-    // -------------------------------------------------------------------------
 
     private @NotNull String currentKey() {
         if (objectEntries == null || objectIndex < 0 || objectIndex >= objectEntries.size())

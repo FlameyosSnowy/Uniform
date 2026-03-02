@@ -1,5 +1,6 @@
 package me.flame.uniform.json.resolvers;
 
+import me.flame.uniform.json.dom.JsonArray;
 import me.flame.uniform.json.dom.JsonBoolean;
 import me.flame.uniform.json.dom.JsonByte;
 import me.flame.uniform.json.dom.JsonDouble;
@@ -7,11 +8,12 @@ import me.flame.uniform.json.dom.JsonFloat;
 import me.flame.uniform.json.dom.JsonInteger;
 import me.flame.uniform.json.dom.JsonLong;
 import me.flame.uniform.json.dom.JsonNull;
-import me.flame.uniform.json.dom.JsonBoolean;
 import me.flame.uniform.json.dom.JsonNumber;
+import me.flame.uniform.json.dom.JsonObject;
 import me.flame.uniform.json.dom.JsonShort;
 import me.flame.uniform.json.dom.JsonString;
 import me.flame.uniform.json.dom.JsonValue;
+import me.flame.uniform.json.exceptions.JsonCoercionException;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -282,7 +284,7 @@ public final class CoreTypeResolverRegistry {
         };
     }
 
-    static int coerceInt(@NotNull JsonValue v) {
+    public static int coerceInt(@NotNull JsonValue v) {
         if (v instanceof JsonNumber n) {
             return n.intValue();
         } else if (v instanceof JsonString s) {
@@ -293,7 +295,7 @@ public final class CoreTypeResolverRegistry {
         return 0;
     }
 
-    static long coerceLong(@NotNull JsonValue v) {
+    public static long coerceLong(@NotNull JsonValue v) {
         if (v instanceof JsonNumber n) {
             return n.longValue();
         } else if (v instanceof JsonString s) {
@@ -304,7 +306,7 @@ public final class CoreTypeResolverRegistry {
         return 0L;
     }
 
-    static double coerceDouble(@NotNull JsonValue v) {
+    public static double coerceDouble(@NotNull JsonValue v) {
         if (v instanceof JsonNumber n) {
             return n.doubleValue();
         } else if (v instanceof JsonString s) {
@@ -315,7 +317,7 @@ public final class CoreTypeResolverRegistry {
         return 0.0;
     }
 
-    static float coerceFloat(@NotNull JsonValue v) {
+    public static float coerceFloat(@NotNull JsonValue v) {
         if (v instanceof JsonNumber n) {
             return n.floatValue();
         } else if (v instanceof JsonString s) {
@@ -326,7 +328,7 @@ public final class CoreTypeResolverRegistry {
         return 0.0f;
     }
 
-    static short coerceShort(@NotNull JsonValue v) {
+    public static short coerceShort(@NotNull JsonValue v) {
         if (v instanceof JsonNumber n) {
             return n.shortValue();
         } else if (v instanceof JsonString s) {
@@ -337,7 +339,7 @@ public final class CoreTypeResolverRegistry {
         return (short) 0;
     }
 
-    static byte coerceByte(@NotNull JsonValue v) {
+    public static byte coerceByte(@NotNull JsonValue v) {
         if (v instanceof JsonNumber n) {
             return n.byteValue();
         } else if (v instanceof JsonString s) {
@@ -348,7 +350,7 @@ public final class CoreTypeResolverRegistry {
         return (byte) 0;
     }
 
-    static boolean coerceBool(@NotNull JsonValue v) {
+    public static boolean coerceBool(@NotNull JsonValue v) {
         if (v instanceof JsonBoolean b) {
             return b.value();
         } else if (v instanceof JsonNumber n) {
@@ -359,13 +361,30 @@ public final class CoreTypeResolverRegistry {
         return false;
     }
 
-    static char coerceChar(@NotNull JsonValue v) {
-        if (v instanceof JsonString s && !s.value().isEmpty()) return s.value().charAt(0);
-        if (v instanceof me.flame.uniform.json.dom.JsonNumber n) return (char) n.intValue();
-        return '\0';
+    public static char coerceChar(JsonValue v) {
+        if (v instanceof JsonString s && s.value().length() == 1)
+            return s.value().charAt(0);
+
+        if (v instanceof JsonNumber n) {
+            int i = n.intValue();
+            if (i >= Character.MIN_VALUE && i <= Character.MAX_VALUE)
+                return (char) i;
+        }
+
+        throw new JsonCoercionException("Cannot coerce to char: " + v);
     }
 
-    private static @NotNull String requireString(@NotNull JsonValue v, @NotNull Class<?> target) {
+    public static String coerceString(@NotNull JsonValue v) {
+        if (v instanceof JsonString s) return s.value();
+        if (v instanceof JsonNumber n) return n.toString();
+        if (v instanceof JsonBoolean b) return Boolean.toString(b.value());
+        if (v instanceof JsonNull) return "null";
+        if (v instanceof JsonArray a) return a.toString();
+        if (v instanceof JsonObject o) return o.toString();
+        return "";
+    }
+
+    public static @NotNull String requireString(@NotNull JsonValue v, @NotNull Class<?> target) {
         if (v instanceof JsonString s) return s.value();
         return bad(v, target);
     }
