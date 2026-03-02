@@ -4,7 +4,7 @@ plugins {
 }
 
 group = "me.flame.uniform"
-version = "1.1.0"
+version = "1.5.1"
 
 java {
     toolchain {
