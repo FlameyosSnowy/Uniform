@@ -70,7 +70,7 @@ public final class JsonCursor implements JsonReadCursor {
     private static final byte[] BYTES_INF     = {'I', 'n', 'f', 'i', 'n', 'i', 't', 'y'};
     private static final byte[] BYTES_NEG_INF = {'-', 'I', 'n', 'f', 'i', 'n', 'i', 't', 'y'};
 
-    // POW10: extended to ±22 - covers virtually all real-world JSON doubles
+    // POW10: ±22 - covers virtually all real-world JSON doubles
     // Index 0 = 1e-22, index 22 = 1e0, index 44 = 1e22
     private static final double[] POW10 = new double[45];
     private static final int POW10_OFFSET = 22;

@@ -272,11 +272,14 @@ public final class UniformJsonProcessor extends AbstractProcessor {
         String pkg = target.packageName();
         String simple = target.simpleName();
 
+        // don't prepend a dot when pkg is empty
+        String generatedPkg = pkg.isEmpty() ? "generated" : pkg + ".generated";
+
         List<Property> properties = collectProperties(type, dynamicSuppliers, enqueue);
 
-        ClassName readerName = ClassName.get(pkg + ".generated", simple + "_JsonReader");
-        ClassName writerName = ClassName.get(pkg + ".generated", simple + "_JsonWriter");
-        ClassName moduleName = ClassName.get(pkg + ".generated", simple + "_JsonModule");
+        ClassName readerName = ClassName.get(generatedPkg, simple + "_JsonReader");
+        ClassName writerName = ClassName.get(generatedPkg, simple + "_JsonWriter");
+        ClassName moduleName = ClassName.get(generatedPkg, simple + "_JsonModule");
 
         writeReader(type, target, readerName, properties);
         writeWriter(target, writerName, properties);
