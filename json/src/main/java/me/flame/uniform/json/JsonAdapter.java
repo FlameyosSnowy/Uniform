@@ -162,6 +162,9 @@ public record JsonAdapter(JsonConfig config, Executor executor) {
 
     public <T> @NotNull String writeValue(@NotNull T value) {
         JsonWriterMapper<T> writerMapper = (JsonWriterMapper<T>) JsonMapperRegistry.getWriter(value.getClass());
+        if (writerMapper == null)
+            throw new IllegalStateException("No JsonWriterMapper registered for " + value.getClass().getName()
+                + ". Ensure the class is annotated with @SerializedObject and was processed by the annotation processor.");
         return writerMapper.write(value);
     }
 
