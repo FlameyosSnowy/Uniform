@@ -56,7 +56,10 @@
   </component>
   <component name="JavacSettings">
     <option name="ADDITIONAL_OPTIONS_OVERRIDE">
-      <module name="Uniform.json.jmh" options="-Auniform.generatedModule=UniformGeneratedJsonModuleJmh" />
+      <module name="Uniform.json" options="--add-modules jdk.incubator.vector --enable-preview -source 21" />
+      <module name="Uniform.json.jmh" options="--add-modules jdk.incubator.vector --enable-preview -source 21 --add-modules jdk.incubator.vector --enable-preview -source 21 -Auniform.generatedModule=UniformGeneratedJsonModuleJmh" />
+      <module name="Uniform.json.main" options="--add-modules jdk.incubator.vector --enable-preview -source 21" />
+      <module name="Uniform.json.test" options="--add-modules jdk.incubator.vector --enable-preview -source 21" />
     </option>
   </component>
 </project>

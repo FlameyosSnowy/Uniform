@@ -10,7 +10,7 @@ version = "1.5.2"
 
 java {
     toolchain {
-        languageVersion.set(JavaLanguageVersion.of(17))
+        languageVersion.set(JavaLanguageVersion.of(21))
     }
 }
 
@@ -40,13 +40,28 @@ dependencies {
     compileOnly("org.jetbrains:annotations:26.0.2")
 }
 
+val vectorArgs = listOf(
+    "--add-modules", "jdk.incubator.vector",
+    "--enable-preview"
+)
+
+tasks.withType<JavaCompile>().configureEach {
+    options.compilerArgs.addAll(listOf(
+        "--add-modules", "jdk.incubator.vector",
+        "--enable-preview",
+        "-source", "21"
+    ))
+}
+
 tasks.test {
     useJUnitPlatform()
+    jvmArgs(vectorArgs)
 }
 
 tasks.jmh {
     jvmArgs.set(listOf(
         "--add-modules", "jdk.incubator.vector",
+        "--enable-preview",
         "-Duniform.generatedModule=UniformGeneratedJsonModuleJmh"
     ))
 }
@@ -56,6 +71,7 @@ tasks.register<JMHTask>("jmhPrettyPrint") {
 
     jvmArgs.set(listOf(
         "--add-modules", "jdk.incubator.vector",
+        "--enable-preview",
         "-Duniform.generatedModule=UniformGeneratedJsonModuleJmh"
     ))
     includes.set(listOf("me.flame.uniform.json.bench.JsonPrettyPrintBenchmark"))
@@ -64,7 +80,10 @@ tasks.register<JMHTask>("jmhPrettyPrint") {
 }
 
 tasks.named<JavaCompile>("compileJmhJava") {
-    options.compilerArgs.addAll(
-        listOf("-Auniform.generatedModule=UniformGeneratedJsonModuleJmh")
-    )
+    options.compilerArgs.addAll(listOf(
+        "--add-modules", "jdk.incubator.vector",
+        "--enable-preview",
+        "-source", "21",
+        "-Auniform.generatedModule=UniformGeneratedJsonModuleJmh"
+    ))
 }

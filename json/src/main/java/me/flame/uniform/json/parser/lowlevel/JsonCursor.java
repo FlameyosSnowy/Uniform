@@ -1,5 +1,7 @@
 package me.flame.uniform.json.parser.lowlevel;
 
+import jdk.incubator.vector.ByteVector;
+import jdk.incubator.vector.VectorSpecies;
 import me.flame.turboscanner.ScanResult;
 import me.flame.uniform.json.JsonConfig;
 import me.flame.uniform.json.dom.JsonArray;
@@ -36,13 +38,7 @@ import java.nio.charset.StandardCharsets;
  * @version 2.0
  */
 public final class JsonCursor implements JsonReadCursor {
-
-    // ============================================================
-    // Static lookup tables
-    // ============================================================
-
-    /** true = byte is plain ASCII whitespace (space/tab/CR/LF) */
-    private static final boolean[] WS = new boolean[256];
+    private static final long[] WS = new long[4];
 
 
     /** Hex digit value, or -1 for non-hex. */
@@ -52,10 +48,9 @@ public final class JsonCursor implements JsonReadCursor {
     private static final boolean[] NUM_START = new boolean[256];
 
     static {
-        WS[' ']  = true;
-        WS['\t'] = true;
-        WS['\r'] = true;
-        WS['\n'] = true;
+        // WS: long[4] bitset - space(0x20), tab(0x09), CR(0x0D), LF(0x0A)
+        // All four are < 64, so only WS[0] is ever set.
+        WS[0] = (1L << ' ') | (1L << '\t') | (1L << '\r') | (1L << '\n');
 
         for (int i = 0; i < 256; i++) HEX_VAL[i] = -1;
         for (int i = '0'; i <= '9'; i++) HEX_VAL[i] = i - '0';
@@ -65,6 +60,9 @@ public final class JsonCursor implements JsonReadCursor {
         for (int i = '0'; i <= '9'; i++) NUM_START[i] = true;
         NUM_START['-'] = true;
     }
+
+    private static final VectorSpecies<Byte> SPECIES = ByteVector.SPECIES_PREFERRED;
+    private static final int                 V_LEN   = SPECIES.length(); // 16 or 32
 
     private static final byte[] BYTES_NAN     = {'N', 'a', 'N'};
     private static final byte[] BYTES_INF     = {'I', 'n', 'f', 'i', 'n', 'i', 't', 'y'};
@@ -88,10 +86,6 @@ public final class JsonCursor implements JsonReadCursor {
     private static final long SWAR_80 = 0x8080808080808080L; // 9259542123273814144
     // Broadcast of '\\' (0x5C) and 0x20 (space) for SWAR scanning
     private static final long SWAR_BACKSLASH = 0x5C5C5C5C5C5C5C5CL; // 6655295901103053916
-
-    // ============================================================
-    // Instance state
-    // ============================================================
 
     private final byte[]     input;
     private final ScanResult scan;
@@ -161,9 +155,6 @@ public final class JsonCursor implements JsonReadCursor {
         this.anyComments                = p.anyComments;
     }
 
-    // ============================================================
-    // Object / Array navigation
-    // ============================================================
     @Override
     public boolean enterObject() {
         skipWs();
@@ -205,7 +196,7 @@ public final class JsonCursor implements JsonReadCursor {
             final int    lim = limit;
             while (pos < lim) {
                 byte c = inp[pos];
-                if (c == ':' || WS[c & 0xFF]) break;
+                if (c == ':' || (WS[b >>> 6] & (1L << (b & 63))) != 0) break;
                 pos++;
             }
             fieldNameLen = pos - fieldNameStart;
@@ -273,9 +264,6 @@ public final class JsonCursor implements JsonReadCursor {
         return true;
     }
 
-    // ============================================================
-    // Field name access
-    // ============================================================
     @Override
     @Contract(" -> new")
     public @NotNull ByteSlice fieldName() {
@@ -309,17 +297,52 @@ public final class JsonCursor implements JsonReadCursor {
         if (len != fieldNameLen) return false;
         final byte[] inp = input;
         final int    off = fieldNameStart;
-        for (int i = 0; i < len; i++) {
-            char c = expected.charAt(i);
-            if (c > 0x7F) return expected.equals(new String(inp, off, len, StandardCharsets.UTF_8));
-            if (inp[off + i] != (byte) c) return false;
+
+        // ≤ 8 chars: SWAR long-pack
+        if (len <= 8) {
+            long inputWord = 0L, expectWord = 0L;
+            for (int i = 0; i < len; i++) {
+                final char c = expected.charAt(i);
+                if (c > 0x7F) return expected.equals(new String(inp, off, len, StandardCharsets.UTF_8));
+                inputWord  |= ((long) (inp[off + i] & 0xFF)) << (i << 3);
+                expectWord |= ((long) c)                      << (i << 3);
+            }
+            return inputWord == expectWord;
+        }
+
+        // > 8 chars: check pure ASCII first
+        // Build a byte[] from the expected string so we can use fromArray().
+        // For field names this is rare (most are short), so the allocation is fine.
+        byte[] expBytes = expected.getBytes(StandardCharsets.UTF_8);
+        if (expBytes.length != len) {
+            // Contains non-ASCII multi-byte chars — UTF-8 expanded, lengths differ
+            return false;
+        }
+
+        int i = 0;
+        final int bulkLimit = len - V_LEN;
+        while (i <= bulkLimit) {
+            ByteVector vi = ByteVector.fromArray(SPECIES, inp,      off + i);
+            ByteVector ve = ByteVector.fromArray(SPECIES, expBytes, i);
+            if (!vi.eq(ve).allTrue()) return false;
+            i += V_LEN;
+        }
+
+        final int tail8Limit = len - 8;
+        while (i <= tail8Limit) {
+            long wi = readLongLE(inp,      off + i);
+            long we = readLongLE(expBytes, i);
+            if (wi != we) return false;
+            i += 8;
+        }
+
+        // Scalar remainder
+        while (i < len) {
+            if (inp[off + i] != expBytes[i]) return false;
+            i++;
         }
         return true;
     }
-
-    // ============================================================
-    // Field value access
-    // ============================================================
 
     @Contract(" -> new")
     @Override
@@ -440,27 +463,56 @@ public final class JsonCursor implements JsonReadCursor {
         return new JsonCursor(input, scan, elementValueStart, elementValueStart + elementValueLen, this);
     }
 
-    // ============================================================
-    // Whitespace / comment skipping
-    // ============================================================
-
-    /**
-     * Fast path: pure whitespace skip using the lookup table.
-     * Comment handling pushed into a cold method so JIT can inline and unroll this freely.
-     */
     private void skipWs() {
         final byte[] inp = input;
         final int    lim = limit;
         int p = pos;
-        while (p < lim && WS[inp[p] & 0xFF]) {
+
+        // SIMD bulk scan
+        final int bulkLimit = lim - V_LEN;
+        while (p <= bulkLimit) {
+            ByteVector v = ByteVector.fromArray(SPECIES, inp, p);
+            // A byte is whitespace iff it equals one of the four WS chars.
+            // Build "is whitespace" mask per lane.
+            var isSpace = v.eq((byte) ' ');
+            var isTab   = v.eq((byte) '\t');
+            var isCR    = v.eq((byte) '\r');
+            var isLF    = v.eq((byte) '\n');
+            var isWsMask = isSpace.or(isTab).or(isCR).or(isLF);
+            // If all lanes are whitespace, skip the whole vector
+            if (isWsMask.allTrue()) {
+                p += V_LEN;
+                continue;
+            }
+            // Find the first lane that is NOT whitespace
+            // trueCount on the NOT mask tells us where to stop
+            var notWs = isWsMask.not();
+            // firstTrue() gives us the lane index of first non-WS byte
+            p += notWs.firstTrue();
+            pos = p;
+            if (anyComments && p < lim) {
+                final int b = inp[p] & 0xFF;
+                if ((allowJavaComments && b == '/') || (allowYamlComments && b == '#')) {
+                    skipComments();
+                }
+            }
+            return;
+        }
+
+        // SWAR tail: handle remaining < V_LEN bytes
+        while (p < lim) {
+            final int b = inp[p] & 0xFF;
+            if ((WS[b >>> 6] & (1L << (b & 63))) == 0) break;
             p++;
         }
         pos = p;
-        if (anyComments) {
-            skipComments();
+        if (anyComments && p < lim) {
+            final int b = inp[p] & 0xFF;
+            if ((allowJavaComments && b == '/') || (allowYamlComments && b == '#')) {
+                skipComments();
+            }
         }
     }
-
     private void skipComments() {
         final byte[]          inp = input;
         final int             lim = limit;
@@ -470,20 +522,21 @@ public final class JsonCursor implements JsonReadCursor {
         boolean again = true;
         while (again) {
             again = false;
-            while (pos < lim && WS[inp[pos] & 0xFF]) {
+            byte b = inp[pos];
+            while (pos < lim && (WS[b >>> 6] & (1L << (b & 63))) != 0) {
                 pos++;
             }
 
-            if (allowJavaComments && pos + 1 < lim && inp[pos] == '/') {
+            if (allowJavaComments && pos + 1 < lim && b == '/') {
                 if (inp[pos + 1] == '/') {
                     pos += 2;
-                    while (pos < lim && inp[pos] != '\n') {
+                    while (pos < lim && b != '\n') {
                         pos++;
                     }
                     again = true;
                 } else if (inp[pos + 1] == '*') {
                     pos += 2;
-                    while (pos + 1 < lim && !(inp[pos] == '*' && inp[pos + 1] == '/')) {
+                    while (pos + 1 < lim && !(b == '*' && inp[pos + 1] == '/')) {
                         pos++;
                     }
                     if (pos + 1 < lim) {
@@ -493,10 +546,10 @@ public final class JsonCursor implements JsonReadCursor {
                 }
             }
 
-            if (allowYamlComments && pos < lim && inp[pos] == '#') {
+            if (allowYamlComments && pos < lim && b == '#') {
                 do {
                     pos++;
-                } while (pos < lim && inp[pos] != '\n');
+                } while (pos < lim && b != '\n');
                 again = true;
             }
         }
@@ -504,17 +557,6 @@ public final class JsonCursor implements JsonReadCursor {
         this.pos = pos;
     }
 
-    // ============================================================
-    // String decoding
-    // ============================================================
-
-    /**
-     * Fast path string decoder.
-     * Uses SWAR (SIMD Within A Register) to scan 8 bytes at once for backslash
-     * or control characters. For typical ASCII JSON strings with no escapes this
-     * is ~8x faster than the previous byte-by-byte scan before falling through to
-     * new String(). The slow path is only entered when a backslash is actually found.
-     */
     private @NotNull String decodeJsonString(int start, int len) {
         final byte[] inp  = input;
         final int    end  = start + len;
@@ -522,17 +564,34 @@ public final class JsonCursor implements JsonReadCursor {
 
         int i = start;
 
-        // SWAR: scan 8 bytes at a time
+        final int bulkLimit = end - V_LEN;
+        while (i <= bulkLimit) {
+            ByteVector v      = ByteVector.fromArray(SPECIES, inp, i);
+            var hasBackslash  = v.eq((byte) '\\');
+            // Control chars: any byte with value < 0x20.
+            // We use lt() which does signed compare. Since all control chars are
+            // positive and < 0x20 this is safe for the ASCII range we care about.
+            var hasControl    = v.lt((byte) 0x20);
+
+            if (hasBackslash.anyTrue()) return decodeJsonStringSlow(start, end);
+            if (checkCtrl && hasControl.anyTrue()) {
+                // Find exactly which byte is the offender for the error message
+                int bad = i + hasControl.firstTrue();
+                throw error("Unescaped control character near byte " + bad);
+            }
+            i += V_LEN;
+        }
+
         final int limit8 = end - 7;
         while (i < limit8) {
             final long word = readLongLE(inp, i);
-            if (swarHasBackslash(word) != 0)               return decodeJsonStringSlow(start, end);
+            if (swarHasBackslash(word) != 0)                          return decodeJsonStringSlow(start, end);
             if (checkCtrl && swarHasLessThan(word, 0x20) != 0)
                 throw error("Unescaped control character near byte " + i);
             i += 8;
         }
 
-        // Remaining 1–7 bytes
+        // Scalar remainder
         while (i < end) {
             final int b = inp[i] & 0xFF;
             if (b == '\\') return decodeJsonStringSlow(start, end);
@@ -543,9 +602,52 @@ public final class JsonCursor implements JsonReadCursor {
         return new String(inp, start, len, StandardCharsets.UTF_8);
     }
 
+    private static int findNextBackslashOrControl(byte[] inp, int from, int end,
+                                                  boolean checkCtrl) {
+        int j = from;
+
+        // SIMD bulk scan
+        final int bulkLimit = end - V_LEN;
+        while (j <= bulkLimit) {
+            ByteVector v     = ByteVector.fromArray(SPECIES, inp, j);
+            var hasSlash     = v.eq((byte) '\\');
+            var hasControl   = checkCtrl ? v.lt((byte) 0x20) : hasSlash.and(hasSlash.not()); // false mask
+            var hits         = hasSlash.or(hasControl);
+            if (hits.anyTrue()) {
+                return j + hits.firstTrue();
+            }
+            j += V_LEN;
+        }
+
+        // SWAR tail
+        final int limit8 = end - 7;
+        while (j < limit8) {
+            final long word = readLongLE(inp, j);
+            final long hits = swarHasBackslash(word);
+            if (hits != 0) return j + (Long.numberOfTrailingZeros(hits) >>> 3);
+            if (checkCtrl && swarHasLessThan(word, 0x20) != 0) {
+                // find exact byte
+                for (int k = j; k < j + 8; k++) {
+                    if ((inp[k] & 0xFF) < 0x20) return k;
+                }
+            }
+            j += 8;
+        }
+
+        // Scalar remainder
+        while (j < end) {
+            final int c = inp[j] & 0xFF;
+            if (c == '\\') return j;
+            if (checkCtrl && c < 0x20) return j;
+            j++;
+        }
+        return end;
+    }
+
     private @NotNull String decodeJsonStringSlow(int start, int endExclusive) {
-        final byte[] inp = input;
-        final int    len = endExclusive - start;
+        final byte[] inp     = input;
+        final int    len     = endExclusive - start;
+        final boolean checkCtrl = !allowUnescapedControlChars;
 
         byte[] buf = DECODE_BUFFER.get();
         if (buf.length < len) {
@@ -553,42 +655,17 @@ public final class JsonCursor implements JsonReadCursor {
             DECODE_BUFFER.set(buf);
         }
         int out = 0;
+        int i   = start;
 
-        int i = start;
         while (i < endExclusive) {
             final int b = inp[i] & 0xFF;
-
-            if (!allowUnescapedControlChars && b < 0x20)
-                throw error("Unescaped control character at byte " + i);
+            if (checkCtrl && b < 0x20) throw error("Unescaped control character at byte " + i);
 
             if (b != '\\') {
-                // ── SWAR bulk copy: find the next backslash in 8-byte strides ──────
-                int j = i + 1;
-                final int bulk8 = endExclusive - 7;
-                final boolean checkCtrl = !allowUnescapedControlChars;
+                // Find the next backslash or control char using SIMD+SWAR
+                int j = findNextBackslashOrControl(inp, i + 1, endExclusive, checkCtrl);
 
-                while (j < bulk8) {
-                    final long word = readLongLE(inp, j);
-                    final long hits = swarHasBackslash(word);
-                    if (hits != 0) {
-                        // Locate exact byte offset within the word
-                        j += Long.numberOfTrailingZeros(hits) >>> 3;
-                        break;
-                    }
-                    if (checkCtrl && swarHasLessThan(word, 0x20) != 0)
-                        throw error("Unescaped control character near byte " + j);
-                    j += 8;
-                }
-
-                // Byte-precise scan for the remainder (< 8 bytes or after SWAR hit)
-                while (j < endExclusive) {
-                    final int c = inp[j] & 0xFF;
-                    if (checkCtrl && c < 0x20) throw error("Unescaped control character at byte " + j);
-                    if (c == '\\') break;
-                    j++;
-                }
-
-                // Bulk copy [i, j) -> single JVM arraycopy intrinsic
+                // Bulk copy [i, j)
                 final int copyLen = j - i;
                 if (out + copyLen > buf.length) {
                     buf = growBuffer(buf, out, out + copyLen);
@@ -600,10 +677,8 @@ public final class JsonCursor implements JsonReadCursor {
                 continue;
             }
 
-            // Escape sequence
             if (++i >= endExclusive) break;
             final byte esc = inp[i++];
-
             switch (esc) {
                 case '"'  -> buf[out++] = '"';
                 case '\'' -> {
@@ -625,10 +700,7 @@ public final class JsonCursor implements JsonReadCursor {
                     final int h4 = HEX_VAL[inp[i + 3] & 0xFF];
                     if ((h1 | h2 | h3 | h4) < 0) throw error("Invalid \\u escape at byte " + (i - 2));
                     i += 4;
-
                     int cp = (h1 << 12) | (h2 << 8) | (h3 << 4) | h4;
-
-                    // Surrogate pair
                     if (cp >= 0xD800 && cp <= 0xDBFF && i + 5 < endExclusive
                         && inp[i] == '\\' && inp[i + 1] == 'u') {
                         final int l1 = HEX_VAL[inp[i + 2] & 0xFF];
@@ -643,7 +715,6 @@ public final class JsonCursor implements JsonReadCursor {
                             }
                         }
                     }
-
                     if (out + 4 > buf.length) {
                         buf = growBuffer(buf, out, out + 4);
                         DECODE_BUFFER.set(buf);
@@ -656,13 +727,9 @@ public final class JsonCursor implements JsonReadCursor {
                 }
             }
         }
-
         return new String(buf, 0, out, StandardCharsets.UTF_8);
     }
 
-    // ============================================================
-    // String-finding internals
-    // ============================================================
     private int findStringEnd(int startQuote) {
         final int from  = startQuote + 1;
         final long[] quotes = scan.getQuoteMask();
@@ -687,12 +754,29 @@ public final class JsonCursor implements JsonReadCursor {
     private int findStringEndManual(int startQuote, byte closing) {
         final byte[] inp = input;
         final int    lim = limit;
-        boolean escaped  = false;
-        for (int i = startQuote + 1; i < lim; i++) {
+        int i = startQuote + 1;
+
+        final int bulkLimit = lim - V_LEN;
+        while (i <= bulkLimit) {
+            ByteVector v      = ByteVector.fromArray(SPECIES, inp, i);
+            var hasClose      = v.eq(closing);
+            var hasBackslash  = v.eq((byte) '\\');
+            var hits          = hasClose.or(hasBackslash);
+            if (hits.anyTrue()) {
+                // Walk from the hit position to handle escapes correctly
+                i += hits.firstTrue();
+                break;
+            }
+            i += V_LEN;
+        }
+
+        boolean escaped = false;
+        while (i < lim) {
             final byte b = inp[i];
-            if (escaped)      { escaped = false; continue; }
-            if (b == '\\')    { escaped = true;  continue; }
+            if (escaped)      { escaped = false; i++; continue; }
+            if (b == '\\')    { escaped = true;  i++; continue; }
             if (b == closing) return i;
+            i++;
         }
         throw error("Unterminated string at byte " + startQuote);
     }
@@ -740,31 +824,20 @@ public final class JsonCursor implements JsonReadCursor {
                 if (idx >= limit) return limit;
 
                 switch (input[idx]) {
-                    // Opening object brace
                     case '{' -> depthObj++;
 
-                    // Closing object brace
                     case '}' -> {
-                        // If at top level, this closes the structure.
                         if (depthObj == 0 && depthArr == 0) return idx;
-
-                        // Decrement depth; if negative, unbalanced close.
                         if (--depthObj < 0) return idx;
                     }
 
-                    // Opening array bracket
                     case '[' -> depthArr++;
 
-                    // Closing array bracket
                     case ']' -> {
-                        // If at top level, this closes the structure.
                         if (depthObj == 0 && depthArr == 0) return idx;
-
-                        // Decrement depth; if negative, unbalanced close.
                         if (--depthArr < 0) return idx;
                     }
 
-                    // Comma at top level separates values
                     case ',' -> {
                         if (depthObj == 0 && depthArr == 0) return idx;
                     }
@@ -808,14 +881,10 @@ public final class JsonCursor implements JsonReadCursor {
                 case ']' -> { if (depthObj == 0 && depthArr == 0) return i; depthArr--; }
                 case ',' -> { if (depthObj == 0 && depthArr == 0) return i; }
             }
-            if (depthObj == 0 && depthArr == 0 && WS[c & 0xFF]) return i;
+            if (depthObj == 0 && depthArr == 0 && (WS[c >>> 6] & (1L << (c & 63))) != 0) return i;
         }
         return lim;
     }
-
-    // ============================================================
-    // Number parsing
-    // ============================================================
 
     private int parseInt(final int start, final int len) {
         if (len == 0) return 0;
@@ -936,7 +1005,6 @@ public final class JsonCursor implements JsonReadCursor {
             }
             if (expNeg) expVal = -expVal;
 
-            // Extended table covers ±22 - handles essentially all JSON doubles
             if (expVal >= -POW10_OFFSET && expVal <= POW10_OFFSET) {
                 result *= POW10[expVal + POW10_OFFSET];
             } else {
@@ -1001,10 +1069,6 @@ public final class JsonCursor implements JsonReadCursor {
         throw error("Unbalanced braces at byte " + openPos);
     }
 
-    // ============================================================
-    // UTF-8 encoding helper
-    // ============================================================
-
     private static int writeUtf8(int cp, byte[] buf, int off) {
         if (cp < 0x80) {
             buf[off++] = (byte) cp;
@@ -1029,10 +1093,6 @@ public final class JsonCursor implements JsonReadCursor {
         System.arraycopy(buf, 0, next, 0, usedBytes);
         return next;
     }
-
-    // ============================================================
-    // SWAR helpers - operate on 8 bytes packed little-endian in a long
-    // ============================================================
     /**
      * Reads 8 bytes from buf[off..off+7] as a little-endian long.
      * Caller must ensure off + 8 <= buf.length.
@@ -1068,10 +1128,6 @@ public final class JsonCursor implements JsonReadCursor {
     private static long swarHasLessThan(long v, int n) {
         return (v - (SWAR_01 * n)) & ~v & SWAR_80;
     }
-
-    // ============================================================
-    // Top-level value parser
-    // ============================================================
 
     /**
      * Public entry point. The root of the input must be a JSON object ({@code {...}}).
