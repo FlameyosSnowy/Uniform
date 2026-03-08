@@ -6,14 +6,14 @@ import java.util.List;
 
 @SerializedObject
 public class User {
-    public int id;
-    public String username;
-    public String email;
-    public int age;
-    public boolean active;
-    public double score;
-    public Address address;
-    public Metadata metadata;
+    private int id;
+    private String username;
+    private String email;
+    private int age;
+    private boolean active;
+    private double score;
+    private Address address;
+    private Metadata metadata;
 
     public User(int id, String username, String email, boolean active, double score, int age, Address address, Metadata metadata) {
         this.id = id;
