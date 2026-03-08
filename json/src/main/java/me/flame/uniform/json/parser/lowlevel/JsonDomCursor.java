@@ -63,17 +63,34 @@ public final class JsonDomCursor implements JsonReadCursor {
     public boolean enterObject() {
         if (!(node instanceof JsonObject obj)) return false;
         // Snapshot the entry list once so nextField() has stable indices.
-        objectEntries = new ArrayList<>(obj.size());
-        for (Map.Entry<String, JsonValue> e : obj) objectEntries.add(e);
+        objectEntries = new ArrayList<>(obj.entries());
         objectIndex = -1;
         return true;
     }
+
+    private Map.Entry<String, JsonValue> currentEntry;
 
     @Override
     public boolean nextField() {
         if (objectEntries == null) return false;
         objectIndex++;
-        return objectIndex < objectEntries.size();
+        if (objectIndex < objectEntries.size()) {
+            currentEntry = objectEntries.get(objectIndex);
+            return true;
+        }
+        return false;
+    }
+
+    // Then currentKey/currentFieldValue become:
+    private @NotNull String currentKey() {
+        if (currentEntry == null) throw new IllegalStateException("No current field - call nextField() first");
+        return currentEntry.getKey();
+    }
+
+    private @NotNull JsonValue currentFieldValue() {
+        if (currentEntry == null) throw new IllegalStateException("No current field - call nextField() first");
+        JsonValue v = currentEntry.getValue();
+        return v != null ? v : JsonNull.INSTANCE;
     }
 
     @Override
@@ -172,19 +189,6 @@ public final class JsonDomCursor implements JsonReadCursor {
     @Override
     public @NotNull JsonDomCursor elementValueCursor() {
         return new JsonDomCursor(currentElement());
-    }
-
-    private @NotNull String currentKey() {
-        if (objectEntries == null || objectIndex < 0 || objectIndex >= objectEntries.size())
-            throw new IllegalStateException("No current field - call nextField() first");
-        return objectEntries.get(objectIndex).getKey();
-    }
-
-    private @NotNull JsonValue currentFieldValue() {
-        if (objectEntries == null || objectIndex < 0 || objectIndex >= objectEntries.size())
-            throw new IllegalStateException("No current field - call nextField() first");
-        JsonValue v = objectEntries.get(objectIndex).getValue();
-        return v != null ? v : JsonNull.INSTANCE;
     }
 
     public @NotNull JsonValue currentElement() {
