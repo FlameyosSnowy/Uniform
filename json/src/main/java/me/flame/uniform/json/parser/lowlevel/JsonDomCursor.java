@@ -81,7 +81,6 @@ public final class JsonDomCursor implements JsonReadCursor {
         return false;
     }
 
-    // Then currentKey/currentFieldValue become:
     private @NotNull String currentKey() {
         if (currentEntry == null) throw new IllegalStateException("No current field - call nextField() first");
         return currentEntry.getKey();

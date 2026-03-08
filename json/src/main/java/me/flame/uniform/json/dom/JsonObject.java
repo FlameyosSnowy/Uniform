@@ -5,6 +5,7 @@ import me.flame.uniform.json.exceptions.JsonTypeException;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -181,5 +182,9 @@ public final class JsonObject implements JsonValue, Iterable<Map.Entry<String, J
             first = false;
         }
         return sb.append('}').toString();
+    }
+
+    public Collection<? extends Map.Entry<String, JsonValue>> entries() {
+        return map.entrySet();
     }
 }
