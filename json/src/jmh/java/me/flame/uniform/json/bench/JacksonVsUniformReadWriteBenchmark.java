@@ -12,19 +12,13 @@ import me.flame.uniform.json.JsonAdapter;
 import me.flame.uniform.json.JsonConfig;
 import me.flame.uniform.json.bench.fixtures.*;
 import org.openjdk.jmh.annotations.*;
-import org.simdjson.JsonValue;
-import org.simdjson.SimdJsonParser;
 import tools.jackson.databind.json.JsonMapper;
 
-import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
-import java.io.InputStreamReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.EnumSet;
-import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.nio.charset.StandardCharsets;
 
@@ -38,7 +32,6 @@ public class JacksonVsUniformReadWriteBenchmark {
 
     private ObjectMapper jackson;
     private Gson gson;
-    private SimdJsonParser simdJson;
     private JsonAdapter uniform;
 
     private String simpleJson;
@@ -60,8 +53,6 @@ public class JacksonVsUniformReadWriteBenchmark {
     private DslJson<Object> dslJson;
 
     private ByteArrayOutputStream dslOut;
-
-    // ── Fixture construction helpers ─────────────────────────────────────────
 
     static SuperComplexBenchPojo buildSuperComplex() {
         return new SuperComplexBenchPojo(
@@ -164,7 +155,6 @@ public class JacksonVsUniformReadWriteBenchmark {
             .disable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
             .build();
         gson     = new Gson();
-        simdJson = new SimdJsonParser();
 
         JsonConfig cfg = new JsonConfig(false, 2,
             EnumSet.noneOf(me.flame.uniform.json.features.JsonReadFeature.class),
@@ -436,133 +426,5 @@ public class JacksonVsUniformReadWriteBenchmark {
     /*@Benchmark
     public void jackson_write_large(Blackhole bh) throws Exception {
         bh.consume(jackson.writeValueAsString(largeJson));
-    }*/
-
-    @Benchmark
-    public void simdjson_read_simple(Blackhole bh) {
-        JsonValue root = simdJson.parse(simpleJsonBytes, simpleJsonBytes.length);
-        bh.consume(new SimpleBenchPojo((int) root.get("id").asLong(), root.get("name").asString()));
-    }
-
-    @Benchmark
-    public void simdjson_read_complex(Blackhole bh) {
-        JsonValue root  = simdJson.parse(complexJsonBytes, complexJsonBytes.length);
-        JsonValue child = root.get("child");
-        bh.consume(new ComplexBenchPojo(
-            (int) root.get("id").asLong(), root.get("name").asString(),
-            new SimpleBenchPojo((int) child.get("id").asLong(), child.get("name").asString()),
-            (int) root.get("count").asLong()
-        ));
-    }
-
-    @Benchmark
-    public void simdjson_read_super_complex(Blackhole bh) {
-        JsonValue r    = simdJson.parse(superComplexJsonBytes, superComplexJsonBytes.length);
-        JsonValue addr = r.get("address");
-        AddressPojo address = new AddressPojo(
-            addr.get("street").asString(), addr.get("city").asString(),
-            addr.get("state").asString(),  addr.get("zip").asString(),
-            addr.get("country").asString(),
-            addr.get("lat").asDouble(),    addr.get("lon").asDouble()
-        );
-
-        List<TagPojo> tags = new java.util.ArrayList<>((int) r.get("tags").getSize());
-        for (Iterator<JsonValue> it = r.get("tags").arrayIterator(); it.hasNext(); ) {
-            JsonValue t = it.next();
-            tags.add(new TagPojo((int) t.get("id").asLong(), t.get("label").asString(), t.get("color").asString()));
-        }
-
-        List<SimpleBenchPojo> friends = new java.util.ArrayList<>((int) r.get("friends").getSize());
-        for (Iterator<JsonValue> it = r.get("friends").arrayIterator(); it.hasNext(); ) {
-            JsonValue f = it.next();
-            friends.add(new SimpleBenchPojo((int) f.get("id").asLong(), f.get("name").asString()));
-        }
-
-        JsonValue meta = r.get("metadata");
-        MetadataPojo metadata = new MetadataPojo(
-            meta.get("source").asString(),       meta.get("version").asString(),
-            (int) meta.get("revision").asLong(), meta.get("verified").asBoolean(),
-            meta.get("locale").asString(),       meta.get("timezone").asString(),
-            meta.get("lastLogin").asLong(),      (int) meta.get("loginCount").asLong()
-        );
-
-        List<OrderPojo> orders = new java.util.ArrayList<>((int) r.get("orders").getSize());
-        for (Iterator<JsonValue> it = r.get("orders").arrayIterator(); it.hasNext(); ) {
-            JsonValue o = it.next();
-            List<OrderItemPojo> items = new java.util.ArrayList<>((int) o.get("items").getSize());
-            for (Iterator<JsonValue> it2 = o.get("items").arrayIterator(); it2.hasNext(); ) {
-                JsonValue i = it2.next();
-                items.add(new OrderItemPojo(
-                    (int) i.get("itemId").asLong(), i.get("sku").asString(),
-                    i.get("description").asString(), (int) i.get("quantity").asLong(),
-                    i.get("unitPrice").asDouble(),   i.get("lineTotal").asDouble()
-                ));
-            }
-            orders.add(new OrderPojo(
-                (int) o.get("orderId").asLong(), o.get("status").asString(),
-                o.get("total").asDouble(),       o.get("currency").asString(),
-                o.get("placedAt").asString(),    items
-            ));
-        }
-
-        bh.consume(new SuperComplexBenchPojo(
-            (int) r.get("id").asLong(), r.get("name").asString(),
-            r.get("email").asString(), r.get("createdAt").asString(),
-            r.get("active").asBoolean(), r.get("score").asDouble(),
-            (int) r.get("age").asLong(), r.get("role").asString(),
-            r.get("bio").asString(), r.get("avatarUrl").asString(),
-            address, tags, friends, metadata, orders
-        ));
-    }
-
-    @Benchmark
-    public void simdjson_read_medium(Blackhole bh) {
-        JsonValue r = simdJson.parse(mediumJsonBytes, mediumJsonBytes.length);
-        JsonValue addr = r.get("address");
-        AddressPojo address = new AddressPojo(
-            addr.get("street").asString(), addr.get("city").asString(),
-            addr.get("state").asString(),  addr.get("zip").asString(),
-            addr.get("country").asString(), 0.0, 0.0
-        );
-
-        List<OrderItemPojo> items = new java.util.ArrayList<>((int) r.get("items").getSize());
-        for (Iterator<JsonValue> it = r.get("items").arrayIterator(); it.hasNext(); ) {
-            JsonValue i = it.next();
-            items.add(new OrderItemPojo(
-                (int) i.get("itemId").asLong(), i.get("sku").asString(),
-                i.get("description").asString(), (int) i.get("quantity").asLong(),
-                i.get("unitPrice").asDouble(),   i.get("lineTotal").asDouble()
-            ));
-        }
-
-        bh.consume(new MediumBenchPojo(
-            (int) r.get("id").asLong(), r.get("name").asString(),
-            r.get("email").asString(), address, items,
-            r.get("status").asString(), r.get("createdAt").asString(),
-            r.get("notes").asString()
-        ));
-    }
-
-    /*@Benchmark
-    public void simdjson_read_large(Blackhole bh) {
-        JsonValue arr = simdJson.parse(largeJsonBytes, largeJsonBytes.length);
-        List<java.util.Map<String, Object>> result = new java.util.ArrayList<>(arr.getSize());
-        for (Iterator<JsonValue> it = arr.arrayIterator(); it.hasNext(); ) {
-            JsonValue obj = it.next();
-            java.util.Map<String, Object> map = new java.util.LinkedHashMap<>();
-            for (Iterator<Map.Entry<String, JsonValue>> ite = obj.objectIterator(); ite.hasNext();) {
-                Map.Entry<String, JsonValue> entry = ite.next();
-                String key = entry.getKey();
-                JsonValue val = entry.getValue();
-                if (val.isString()) map.put(key, val.asString());
-                else if (val.isBoolean()) map.put(key, val.asBoolean());
-                else if (val.isLong()) map.put(key, val.asLong());
-                else if (val.isDouble()) map.put(key, val.asDouble());
-                else if (val.isArray() || val.isObject()) map.put(key, val.toString()); // nested simplified
-                else map.put(key, null);
-            }
-            result.add(map);
-        }
-        bh.consume(result);
     }*/
 }

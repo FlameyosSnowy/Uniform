@@ -10,7 +10,7 @@ version = "1.5.2"
 
 java {
     toolchain {
-        languageVersion.set(JavaLanguageVersion.of(21))
+        languageVersion.set(JavaLanguageVersion.of(17))
     }
 }
 
@@ -25,7 +25,6 @@ dependencies {
 
     jmhImplementation("tools.jackson.core:jackson-databind:3.0.3")
     jmhImplementation("com.google.code.gson:gson:2.11.0")
-    jmhImplementation("org.simdjson:simdjson-java:0.3.0")
     jmhAnnotationProcessor("com.dslplatform:dsl-json:2.0.2")
     jmhImplementation("com.dslplatform:dsl-json:2.0.2")
 
@@ -51,7 +50,7 @@ tasks.withType<JavaCompile>().configureEach {
     options.compilerArgs.addAll(listOf(
         "--add-modules", "jdk.incubator.vector",
         "--enable-preview",
-        "-source", "21"
+        "-source", "17"
     ))
 }
 
@@ -85,7 +84,7 @@ tasks.named<JavaCompile>("compileJmhJava") {
     options.compilerArgs.addAll(listOf(
         "--add-modules", "jdk.incubator.vector",
         "--enable-preview",
-        "-source", "21",
+        "-source", "17",
         "-Auniform.generatedModule=UniformGeneratedJsonModuleJmh"
     ))
 }
