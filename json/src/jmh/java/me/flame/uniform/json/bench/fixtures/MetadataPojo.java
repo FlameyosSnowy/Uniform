@@ -1,8 +1,10 @@
 package me.flame.uniform.json.bench.fixtures;
 
+import com.dslplatform.json.CompiledJson;
 import me.flame.uniform.core.annotations.SerializedObject;
 
 @SerializedObject
+@CompiledJson
 public class MetadataPojo {
     public String source;
     public String version;

@@ -1,9 +1,11 @@
 package me.flame.uniform.json.bench.fixtures;
 
+import com.dslplatform.json.CompiledJson;
 import me.flame.uniform.core.annotations.SerializedObject;
 import java.util.List;
 
 @SerializedObject
+@CompiledJson
 public class OrderPojo {
     public int orderId;
     public String status;
