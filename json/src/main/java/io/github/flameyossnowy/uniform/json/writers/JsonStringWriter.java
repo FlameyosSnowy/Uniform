@@ -157,36 +157,42 @@ public sealed class JsonStringWriter permits JsonDomBuilder {
     }
 
     public JsonStringWriter nullValue() {
+        commaIfNeeded();
         write(NULL);
         needComma = true;
         return this;
     }
 
     public JsonStringWriter value(boolean v) {
+        commaIfNeeded();
         write(v ? TRUE : FALSE);
         needComma = true;
         return this;
     }
 
     public JsonStringWriter value(int v) {
+        commaIfNeeded();
         writeAscii(Integer.toString(v));
         needComma = true;
         return this;
     }
 
     public JsonStringWriter value(long v) {
+        commaIfNeeded();
         writeAscii(Long.toString(v));
         needComma = true;
         return this;
     }
 
     public JsonStringWriter value(double v) {
+        commaIfNeeded();
         writeAscii(Double.toString(v));
         needComma = true;
         return this;
     }
 
     public JsonStringWriter value(float v) {
+        commaIfNeeded();
         writeAscii(Float.toString(v));
         needComma = true;
         return this;
@@ -194,13 +200,19 @@ public sealed class JsonStringWriter permits JsonDomBuilder {
 
     public JsonStringWriter value(Number v) {
         if (v == null) return nullValue();
+        commaIfNeeded();
         writeAscii(v.toString());
         needComma = true;
         return this;
     }
 
     public JsonStringWriter value(String v) {
-        if (v == null) return nullValue();
+        commaIfNeeded();
+        if (v == null) {
+            write(NULL);
+            needComma = true;
+            return this;
+        }
         writeString(v);
         needComma = true;
         return this;
@@ -282,7 +294,6 @@ public sealed class JsonStringWriter permits JsonDomBuilder {
 
     private void writeString(String s) {
         final int len = s.length();
-        // Worst case: every char becomes uXXXX (6 bytes) + 2 quotes
         ensure(len * 6 + 2);
         buf[pos++] = '"';
 
@@ -291,7 +302,6 @@ public sealed class JsonStringWriter permits JsonDomBuilder {
             char c = s.charAt(i);
             if (c >= 128 || !NEEDS_ESCAPE[c]) continue;
 
-            // Flush safe ASCII prefix as UTF-8
             if (i > safe) {
                 writeUtf8(s, safe, i);
             }
@@ -347,7 +357,6 @@ public sealed class JsonStringWriter permits JsonDomBuilder {
                 buf[pos++] = (byte) (0x80 | ((c >> 6) & 0x3F));
                 buf[pos++] = (byte) (0x80 | (c & 0x3F));
             } else {
-                // Surrogate pair -> 4-byte UTF-8
                 ensure(4);
                 int cp = Character.toCodePoint(c, s.charAt(++i));
                 buf[pos++] = (byte) (0xF0 | (cp >> 18));
@@ -359,28 +368,77 @@ public sealed class JsonStringWriter permits JsonDomBuilder {
     }
 
     /**
-     * Writes {@code bytes} directly into the output buffer with a single
-     * {@link System#arraycopy}. No encoding, no escaping.
-     * Used for pre-encoded field name fragments and literal constants.
+     * Writes {@code bytes} directly into the output buffer and automatically
+     * participates in the comma protocol by inspecting the last byte:
+     * <ul>
+     *   <li>Last byte is {@code ':'} → treated as a field-name fragment
+     *       (e.g. {@code "fieldName":}). A comma is prepended when needed and
+     *       {@code needComma} is cleared so the following value does not add
+     *       a spurious comma.
+     *   <li>Any other last byte → treated as a value fragment. A comma is
+     *       prepended when needed and {@code needComma} is set to {@code true}.
+     * </ul>
      */
     public void writeRaw(byte[] bytes) {
+        final boolean isName = bytes.length > 0 && bytes[bytes.length - 1] == ':';
+        commaIfNeeded();
         ensure(bytes.length);
         System.arraycopy(bytes, 0, buf, pos, bytes.length);
         pos += bytes.length;
+        needComma = !isName;
     }
 
     /**
-     * Writes {@code len} bytes from {@code bytes[off..off+len)} into the buffer.
-     * Used when only a slice of a pre-allocated array is valid (e.g. Ryu output).
+     * Writes {@code len} bytes from {@code bytes[off..off+len)}.
+     * Same comma-protocol rules as {@link #writeRaw(byte[])}: if the last byte
+     * is {@code ':'} the fragment is treated as a field name; otherwise as a value.
      */
     public void writeRaw(byte[] bytes, int off, int len) {
+        final boolean isName = len > 0 && bytes[off + len - 1] == ':';
+        commaIfNeeded();
         ensure(len);
         System.arraycopy(bytes, off, buf, pos, len);
         pos += len;
+        needComma = !isName;
     }
 
-    // Two-digit lookup table - one read gets two digits, eliminating division
-    // in the common case.
+    /**
+     * Writes a pre-encoded field name fragment (e.g. {@code "fieldName":}) directly
+     * into the output buffer. Handles comma insertion before the name, then resets
+     * {@code needComma} to false since the trailing colon means a value follows next.
+     */
+    public void writeRawName(byte[] bytes) {
+        commaIfNeeded();
+        ensure(bytes.length);
+        System.arraycopy(bytes, 0, buf, pos, bytes.length);
+        pos += bytes.length;
+        needComma = false;
+    }
+
+    /**
+     * Writes a pre-encoded value fragment directly into the output buffer.
+     * Handles comma insertion and marks that the next sibling will need a comma.
+     */
+    public void writeRawValue(byte[] bytes) {
+        commaIfNeeded();
+        ensure(bytes.length);
+        System.arraycopy(bytes, 0, buf, pos, bytes.length);
+        pos += bytes.length;
+        needComma = true;
+    }
+
+    /**
+     * Writes a slice of a pre-encoded value fragment.
+     */
+    public void writeRawValue(byte[] bytes, int off, int len) {
+        commaIfNeeded();
+        ensure(len);
+        System.arraycopy(bytes, off, buf, pos, len);
+        pos += len;
+        needComma = true;
+    }
+
+    // Two-digit lookup table
     private static final byte[] DIGIT_PAIRS;
     static {
         DIGIT_PAIRS = new byte[200];
@@ -400,14 +458,17 @@ public sealed class JsonStringWriter permits JsonDomBuilder {
      * Never allocates a String. Handles all values including {@link Integer#MIN_VALUE}.
      */
     public void writeInt(int value) {
-        ensure(11); // max: "-2147483648" = 11 bytes
+        commaIfNeeded();
+        ensure(11);
         if (value == Integer.MIN_VALUE) {
             System.arraycopy(MIN_INT_BYTES, 0, buf, pos, MIN_INT_BYTES.length);
             pos += MIN_INT_BYTES.length;
+            needComma = true;
             return;
         }
         if (value < 0) { buf[pos++] = '-'; value = -value; }
         pos = writePositiveInt(value, buf, pos);
+        needComma = true;
     }
 
     /**
@@ -415,19 +476,20 @@ public sealed class JsonStringWriter permits JsonDomBuilder {
      * Never allocates a String. Handles all values including {@link Long#MIN_VALUE}.
      */
     public void writeLong(long value) {
-        ensure(20); // max: "-9223372036854775808" = 20 bytes
+        commaIfNeeded();
+        ensure(20);
         if (value == Long.MIN_VALUE) {
             System.arraycopy(MIN_LONG_BYTES, 0, buf, pos, MIN_LONG_BYTES.length);
             pos += MIN_LONG_BYTES.length;
+            needComma = true;
             return;
         }
         if (value < 0) { buf[pos++] = '-'; value = -value; }
         pos = writePositiveLong(value, buf, pos);
+        needComma = true;
     }
 
     private static int writePositiveInt(int v, byte[] buf, int pos) {
-        // Unrolled for the most common cases (1–4 digits cover the majority of
-        // integer fields: ages, counts, IDs, status codes, etc.)
         if (v < 10) {
             buf[pos] = (byte) ('0' + v);
             return pos + 1;
@@ -453,8 +515,6 @@ public sealed class JsonStringWriter permits JsonDomBuilder {
             buf[pos+3] = DIGIT_PAIRS[lo * 2 + 1];
             return pos + 4;
         }
-        // General case: write right-to-left into a 10-byte local scratch area
-        // that sits on the stack (JIT will typically eliminate the allocation).
         final byte[] tmp = new byte[10];
         int end = 10;
         while (v >= 100) {
@@ -475,8 +535,6 @@ public sealed class JsonStringWriter permits JsonDomBuilder {
     }
 
     private static int writePositiveLong(long v, byte[] buf, int pos) {
-        // Delegate to int path when safe - avoids the 64-bit division loop
-        // for the vast majority of long fields (timestamps aside).
         if (v <= Integer.MAX_VALUE) return writePositiveInt((int) v, buf, pos);
         final byte[] tmp = new byte[19];
         int end = 19;
@@ -496,51 +554,61 @@ public sealed class JsonStringWriter permits JsonDomBuilder {
         System.arraycopy(tmp, end, buf, pos, written);
         return pos + written;
     }
-    
-    // Thread-local 25-byte scratch buffer for double/float digit output.
-    // 25 bytes covers the longest possible double string ("−1.7976931348623157E+308" = 24 chars).
+
     private static final ThreadLocal<byte[]> FP_BUF =
         ThreadLocal.withInitial(() -> new byte[25]);
 
     /**
      * Writes a {@code double} value as ASCII decimal into the buffer.
-     * For special values (NaN, Infinity, 0.0) this is branch-free and allocation-free.
-     * For general values, uses {@code Double.toString} but writes directly into the
-     * output buffer via the deprecated ASCII-only {@code String.getBytes(int,int,byte[],int)}
-     * - which is safe here because {@code Double.toString} always produces ASCII output.
+     * Handles comma insertion and special values (NaN, Infinity, 0.0).
      */
     public void writeDouble(double value) {
-        // Special cases first: covers a meaningful fraction of real JSON doubles
+        commaIfNeeded();
         if (value == 0.0) {
-            ensure(4); // "0.0" or "-0.0"
+            ensure(4);
             if (1.0 / value == Double.NEGATIVE_INFINITY) {
                 buf[pos++] = '-';
             }
             buf[pos++] = '0';
             buf[pos++] = '.';
             buf[pos++] = '0';
+            needComma = true;
             return;
         }
         if (Double.isNaN(value)) {
             ensure(3);
             buf[pos++] = 'N'; buf[pos++] = 'a'; buf[pos++] = 'N';
+            needComma = true;
             return;
         }
-        // General case: Double.toString always produces ASCII, so we can use the
-        // deprecated getBytes(int,int,byte[],int) safely - it's an ASCII-only cast.
-        // This avoids both a char[] allocation and a UTF-8 encoding pass.
+        if (value == Double.POSITIVE_INFINITY) {
+            ensure(8);
+            System.arraycopy(BYTES_INFINITY, 0, buf, pos, 8);
+            pos += 8;
+            needComma = true;
+            return;
+        }
+        if (value == Double.NEGATIVE_INFINITY) {
+            ensure(9);
+            System.arraycopy(BYTES_NEG_INFINITY, 0, buf, pos, 9);
+            pos += 9;
+            needComma = true;
+            return;
+        }
         final String s = Double.toString(value);
         final int    n = s.length();
         ensure(n);
         //noinspection deprecation
-        s.getBytes(0, n, buf, pos); // safe: Double.toString is always ASCII
+        s.getBytes(0, n, buf, pos);
         pos += n;
+        needComma = true;
     }
 
     /**
      * Writes a {@code float} value. See {@link #writeDouble} for notes.
      */
     public void writeFloat(float value) {
+        commaIfNeeded();
         if (value == 0.0f) {
             ensure(4);
             if (1.0f / value == Float.NEGATIVE_INFINITY) {
@@ -549,66 +617,61 @@ public sealed class JsonStringWriter permits JsonDomBuilder {
             buf[pos++] = '0';
             buf[pos++] = '.';
             buf[pos++] = '0';
+            needComma = true;
             return;
         }
         if (Float.isNaN(value)) {
-            writeDouble(Double.NaN);
+            ensure(3);
+            buf[pos++] = 'N'; buf[pos++] = 'a'; buf[pos++] = 'N';
+            needComma = true;
             return;
         }
-        if (value == Double.POSITIVE_INFINITY) {
-            final byte[] b =  BYTES_INFINITY;
+        if (value == Float.POSITIVE_INFINITY) {
             ensure(8);
-            System.arraycopy(b, 0, buf, pos, 8);
+            System.arraycopy(BYTES_INFINITY, 0, buf, pos, 8);
             pos += 8;
+            needComma = true;
             return;
         }
-        if (value == Double.NEGATIVE_INFINITY) {
-            final byte[] b = BYTES_NEG_INFINITY;
+        if (value == Float.NEGATIVE_INFINITY) {
             ensure(9);
-            System.arraycopy(b, 0, buf, pos, 9);
+            System.arraycopy(BYTES_NEG_INFINITY, 0, buf, pos, 9);
             pos += 9;
-
-            writeDouble(Double.NEGATIVE_INFINITY);
+            needComma = true;
             return;
         }
         final String s = Float.toString(value);
         final int    n = s.length();
         ensure(n);
         //noinspection deprecation
-        s.getBytes(0, n, buf, pos); // safe: Float.toString is always ASCII
+        s.getBytes(0, n, buf, pos);
         pos += n;
+        needComma = true;
     }
 
     /**
      * Writes a quoted JSON string value with an ASCII fast-path.
-     * <p>
-     * Scans the string in 4-char SWAR chunks for any byte above 0x7F or any
-     * character requiring JSON escaping ({@code "}, {@code \}, control chars).
-     * If the string is pure printable ASCII with no JSON-special chars, it is
-     * written with a single {@link System#arraycopy} after opening/closing quotes.
-     * Otherwise, falls back to {@link #value(String)} which handles full UTF-8
-     * encoding and escape sequences.
-     *
-     * @param s the string to write; must not be null (caller checks)
+     * Handles comma insertion before the value.
      */
     @SuppressWarnings("deprecation")
     public void writeQuotedAsciiOrUtf8(String s) {
-        if (s == null) { writeRaw(new byte[]{'n','u','l','l'}); return; }
+        commaIfNeeded();
+        if (s == null) {
+            ensure(4);
+            System.arraycopy(NULL, 0, buf, pos, 4);
+            pos += 4;
+            needComma = true;
+            return;
+        }
         final int len = s.length();
 
-        // Phase 1: scan for anything that requires slow-path handling.
-        // We check 4 chars at a time by OR-ing into a single int and testing:
-        //   - bit 15+ set  => non-ASCII (char > 0x7F)
-        //   - any char == '"' (0x22) or '\\' (0x5C) or < 0x20 (control)
         boolean fast = true;
         int i = 0;
         final int limit4 = len - 3;
         while (i < limit4) {
             final char c0 = s.charAt(i), c1 = s.charAt(i+1),
                 c2 = s.charAt(i+2), c3 = s.charAt(i+3);
-            // Non-ASCII check: any char >= 0x80
             if (((c0 | c1 | c2 | c3) & 0xFF80) != 0) { fast = false; break; }
-            // Escape check: '"', '\\', or control char < 0x20
             if (c0 == '"' || c0 == '\\' || c0 < 0x20) { fast = false; break; }
             if (c1 == '"' || c1 == '\\' || c1 < 0x20) { fast = false; break; }
             if (c2 == '"' || c2 == '\\' || c2 < 0x20) { fast = false; break; }
@@ -624,27 +687,27 @@ public sealed class JsonStringWriter permits JsonDomBuilder {
         }
 
         if (fast) {
-            // Pure printable ASCII, no escaping needed: write as "...\0"
             ensure(len + 2);
             buf[pos++] = '"';
-            // Deprecated String.getBytes is safe here: we've verified all chars are ASCII.
             s.getBytes(0, len, buf, pos);
             pos += len;
             buf[pos++] = '"';
         } else {
-            // Non-ASCII or contains escape-requiring chars: full encoding path
-            value(s);
+            writeString(s);
         }
+        needComma = true;
     }
 
     /**
      * Writes a quoted JSON object key (field name) from a runtime String with an
-     * ASCII fast-path. Used for Map<String, V> keys that are not known at codegen time.
-     * The output is {@code "key":} (colon included) to match pre-encoded field fragments.
+     * ASCII fast-path. Output is {@code "key":} (colon included).
+     * Handles comma insertion and resets {@code needComma} to false so the
+     * following value does not emit a spurious comma.
      */
     @SuppressWarnings("deprecation")
     public void writeQuotedNameAsciiOrUtf8(String key) {
         if (key == null) return; // malformed map - skip
+        commaIfNeeded();
         final int len = key.length();
 
         boolean fast = true;
@@ -671,13 +734,14 @@ public sealed class JsonStringWriter permits JsonDomBuilder {
         if (fast) {
             ensure(len + 3); // "key":
             buf[pos++] = '"';
-            key.getBytes(0, len, buf, pos); // safe: verified ASCII
+            key.getBytes(0, len, buf, pos);
             pos += len;
             buf[pos++] = '"';
             buf[pos++] = ':';
         } else {
-            // Non-ASCII key: fall back to name() which handles encoding + escaping
-            name(key);
+            name(key); // handles encoding + escaping, sets needComma=false itself
+            return;
         }
+        needComma = false; // colon written; value follows next
     }
 }
