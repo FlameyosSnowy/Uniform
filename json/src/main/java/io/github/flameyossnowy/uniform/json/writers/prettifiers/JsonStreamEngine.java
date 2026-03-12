@@ -1,6 +1,6 @@
 package io.github.flameyossnowy.uniform.json.writers.prettifiers;
 
-import me.flame.turboscanner.ScanResult;
+import io.github.flameyossnowy.turboscanner.ScanResult;
 
 import org.jetbrains.annotations.NotNull;
 

@@ -68,11 +68,11 @@ public final class UniformJsonProcessor extends AbstractProcessor {
     );
 
     private static final ClassName CORE_REGISTRY =
-        ClassName.get("me.flame.uniform.json.resolvers", "CoreTypeResolverRegistry");
+        ClassName.get("io.github.flameyossnowy.uniform.json.resolvers", "CoreTypeResolverRegistry");
     private static final ClassName CORE_RESOLVER =
-        ClassName.get("me.flame.uniform.json.resolvers", "CoreTypeResolver");
+        ClassName.get("io.github.flameyossnowy.uniform.json.resolvers", "CoreTypeResolver");
     private static final ClassName JSON_VALUE =
-        ClassName.get("me.flame.uniform.json.dom", "JsonValue");
+        ClassName.get("io.github.flameyossnowy.uniform.json.dom", "JsonValue");
 
     private static final String FIELD_TRUE  = "__BTRUE";
     private static final String FIELD_FALSE = "__BFALSE";
@@ -497,9 +497,9 @@ public final class UniformJsonProcessor extends AbstractProcessor {
 
     private void writeReader(TypeElement typeElement, ClassName target, ClassName readerName,
                              List<Property> props) throws IOException {
-        ClassName jsonCursor = ClassName.get("me.flame.uniform.json.parser", "JsonReadCursor");
-        ClassName jsonMapper = ClassName.get("me.flame.uniform.json.mappers", "JsonMapper");
-        ClassName jsonConfig = ClassName.get("me.flame.uniform.json", "JsonConfig");
+        ClassName jsonCursor = ClassName.get("io.github.flameyossnowy.uniform.json.parser", "JsonReadCursor");
+        ClassName jsonMapper = ClassName.get("io.github.flameyossnowy.uniform.json.mappers", "JsonMapper");
+        ClassName jsonConfig = ClassName.get("io.github.flameyossnowy.uniform.json", "JsonConfig");
 
         TypeSpec.Builder classBuilder = TypeSpec.classBuilder(readerName)
             .addAnnotation(AnnotationSpec.builder(Generated.class)
@@ -540,7 +540,7 @@ public final class UniformJsonProcessor extends AbstractProcessor {
             addHashConstantsTo(classBuilder, props);
         }
 
-        ClassName concreteCursor = ClassName.get("me.flame.uniform.json.parser.lowlevel", "JsonCursor");
+        ClassName concreteCursor = ClassName.get("io.github.flameyossnowy.uniform.json.parser.lowlevel", "JsonCursor");
 
         MethodSpec readFields = MethodSpec.methodBuilder("readFields")
             .addModifiers(Modifier.PUBLIC) // public so cross-package generated readers can call it
@@ -589,7 +589,7 @@ public final class UniformJsonProcessor extends AbstractProcessor {
 
     private CodeBlock buildReaderBody(TypeElement typeElement, ClassName target, List<Property> props) {
         CodeBlock.Builder cb = CodeBlock.builder();
-        ClassName readFeature = ClassName.get("me.flame.uniform.json.features", "JsonReadFeature");
+        ClassName readFeature = ClassName.get("io.github.flameyossnowy.uniform.json.features", "JsonReadFeature");
 
         for (Property p : props) {
             cb.addStatement("$T $L = null", boxIfPrimitive(p.typeName()), p.javaName());
@@ -692,7 +692,7 @@ public final class UniformJsonProcessor extends AbstractProcessor {
 
     private static void emitDupeCheck(CodeBlock.Builder cb, Property p) {
         cb.beginControlFlow("if (__strictDupes && __seen_$L)", p.javaName());
-        cb.addStatement("throw new me.flame.uniform.json.exceptions.JsonException(\"Duplicate field '$L' detected\")", p.jsonName());
+        cb.addStatement("throw new io.github.flameyossnowy.uniform.json.exceptions.JsonException(\"Duplicate field '$L' detected\")", p.jsonName());
         cb.endControlFlow();
         cb.addStatement("__seen_$L = true", p.javaName());
     }
@@ -720,13 +720,13 @@ public final class UniformJsonProcessor extends AbstractProcessor {
         TypeName t   = p.typeName();
         String   var = p.javaName();
 
-        ClassName jsonCursor         = ClassName.get("me.flame.uniform.json.parser", "JsonReadCursor");
-        ClassName jsonMapperRegistry = ClassName.get("me.flame.uniform.json.mappers", "JsonMapperRegistry");
-        ClassName jsonMapper         = ClassName.get("me.flame.uniform.json.mappers", "JsonMapper");
-        ClassName resolverRegistry   = ClassName.get("me.flame.uniform.core.resolvers", "ResolverRegistry");
-        ClassName simpleCtx          = ClassName.get("me.flame.uniform.core.resolvers", "SimpleResolutionContext");
-        ClassName typeResolver       = ClassName.get("me.flame.uniform.core.resolvers", "TypeResolver");
-        ClassName dynamicSupplier    = ClassName.get("me.flame.uniform.core.resolvers", "ContextDynamicTypeSupplier");
+        ClassName jsonCursor         = ClassName.get("io.github.flameyossnowy.uniform.json.parser", "JsonReadCursor");
+        ClassName jsonMapperRegistry = ClassName.get("io.github.flameyossnowy.uniform.json.mappers", "JsonMapperRegistry");
+        ClassName jsonMapper         = ClassName.get("io.github.flameyossnowy.uniform.json.mappers", "JsonMapper");
+        ClassName resolverRegistry   = ClassName.get("io.github.flameyossnowy.uniform.core.resolvers", "ResolverRegistry");
+        ClassName simpleCtx          = ClassName.get("io.github.flameyossnowy.uniform.core.resolvers", "SimpleResolutionContext");
+        ClassName typeResolver       = ClassName.get("io.github.flameyossnowy.uniform.core.resolvers", "TypeResolver");
+        ClassName dynamicSupplier    = ClassName.get("io.github.flameyossnowy.uniform.core.resolvers", "ContextDynamicTypeSupplier");
 
         CollectionKind ck = collectionKind(p.typeMirror());
 
@@ -809,7 +809,7 @@ public final class UniformJsonProcessor extends AbstractProcessor {
 
             // Maps need a sub-cursor because the key/value iteration model is different
             // (nextField gives us a key as bytes, not an element). Keep sub-cursor here.
-            ClassName concreteCursorForMap = ClassName.get("me.flame.uniform.json.parser.lowlevel", "JsonCursor");
+            ClassName concreteCursorForMap = ClassName.get("io.github.flameyossnowy.uniform.json.parser.lowlevel", "JsonCursor");
             cb.addStatement("$T __mapCur = ($T) $L.fieldValueCursor()", concreteCursorForMap, concreteCursorForMap, cursorExpr);
             cb.addStatement("if (!__mapCur.enterObject()) $L = null", var);
             cb.beginControlFlow("else");
@@ -872,7 +872,7 @@ public final class UniformJsonProcessor extends AbstractProcessor {
         // would redundantly call.
         // finishFieldAfterValue() consumes the trailing comma afterwards.
         if (p.typeMirror().getKind() == TypeKind.DECLARED) {
-            ClassName concreteCursor = ClassName.get("me.flame.uniform.json.parser.lowlevel", "JsonCursor");
+            ClassName concreteCursor = ClassName.get("io.github.flameyossnowy.uniform.json.parser.lowlevel", "JsonCursor");
             if (t instanceof ClassName declared) {
                 ClassName directReader = readerNameFor(declared);
                 cb.beginControlFlow("if (!$L.enterObjectValue())", cursorExpr);
@@ -918,8 +918,8 @@ public final class UniformJsonProcessor extends AbstractProcessor {
             return;
         }
 
-        ClassName jsonCursor = ClassName.get("me.flame.uniform.json.parser", "JsonReadCursor");
-        ClassName concreteCursor = ClassName.get("me.flame.uniform.json.parser.lowlevel", "JsonCursor");
+        ClassName jsonCursor = ClassName.get("io.github.flameyossnowy.uniform.json.parser", "JsonReadCursor");
+        ClassName concreteCursor = ClassName.get("io.github.flameyossnowy.uniform.json.parser.lowlevel", "JsonCursor");
         if (elemType instanceof ClassName declared) {
             // enterObjectElement() advances pos past '{' in-place for the current element.
             // readFields() then reads the nested object without allocating a sub-cursor.
@@ -961,8 +961,8 @@ public final class UniformJsonProcessor extends AbstractProcessor {
             return;
         }
 
-        ClassName jsonCursor = ClassName.get("me.flame.uniform.json.parser", "JsonReadCursor");
-        ClassName concreteCursor = ClassName.get("me.flame.uniform.json.parser.lowlevel", "JsonCursor");
+        ClassName jsonCursor = ClassName.get("io.github.flameyossnowy.uniform.json.parser", "JsonReadCursor");
+        ClassName concreteCursor = ClassName.get("io.github.flameyossnowy.uniform.json.parser.lowlevel", "JsonCursor");
         if (valType instanceof ClassName declared) {
             ClassName directReader = readerNameFor(declared);
             cb.beginControlFlow("if (!__mapCur.enterObjectValue())");
@@ -984,9 +984,9 @@ public final class UniformJsonProcessor extends AbstractProcessor {
 
     private void writeWriterInternal(ClassName target, ClassName writerName,
                                      List<Property> props) throws IOException {
-        ClassName jsonWriterMapper = ClassName.get("me.flame.uniform.json.mappers", "JsonWriterMapper");
-        ClassName jsonStringWriter = ClassName.get("me.flame.uniform.json.writers", "JsonStringWriter");
-        ClassName jsonConfig       = ClassName.get("me.flame.uniform.json", "JsonConfig");
+        ClassName jsonWriterMapper = ClassName.get("io.github.flameyossnowy.uniform.json.mappers", "JsonWriterMapper");
+        ClassName jsonStringWriter = ClassName.get("io.github.flameyossnowy.uniform.json.writers", "JsonStringWriter");
+        ClassName jsonConfig       = ClassName.get("io.github.flameyossnowy.uniform.json", "JsonConfig");
 
         TypeSpec.Builder classBuilder = TypeSpec.classBuilder(writerName)
             .addAnnotation(AnnotationSpec.builder(Generated.class)
@@ -1064,9 +1064,9 @@ public final class UniformJsonProcessor extends AbstractProcessor {
 
     private CodeBlock buildWriterBody(List<Property> props) {
         CodeBlock.Builder cb = CodeBlock.builder();
-        ClassName jsonWriterMapper   = ClassName.get("me.flame.uniform.json.mappers", "JsonWriterMapper");
-        ClassName jsonMapperRegistry = ClassName.get("me.flame.uniform.json.mappers", "JsonMapperRegistry");
-        ClassName writeFeature       = ClassName.get("me.flame.uniform.json.features", "JsonWriteFeature");
+        ClassName jsonWriterMapper   = ClassName.get("io.github.flameyossnowy.uniform.json.mappers", "JsonWriterMapper");
+        ClassName jsonMapperRegistry = ClassName.get("io.github.flameyossnowy.uniform.json.mappers", "JsonMapperRegistry");
+        ClassName writeFeature       = ClassName.get("io.github.flameyossnowy.uniform.json.features", "JsonWriteFeature");
 
         cb.addStatement("final boolean __writeNulls = __config == null || __config.hasWriteFeature($T.WRITE_NULL_MAP_VALUES)", writeFeature);
 
@@ -1284,9 +1284,9 @@ public final class UniformJsonProcessor extends AbstractProcessor {
 
     private void writeModule(ClassName target, ClassName readerName, ClassName writerName,
                              ClassName moduleName) throws IOException {
-        ClassName jsonMapperModule   = ClassName.get("me.flame.uniform.json.mappers", "JsonMapperModule");
-        ClassName jsonMapperRegistry = ClassName.get("me.flame.uniform.json.mappers", "JsonMapperRegistry");
-        ClassName jsonConfig         = ClassName.get("me.flame.uniform.json", "JsonConfig");
+        ClassName jsonMapperModule   = ClassName.get("io.github.flameyossnowy.uniform.json.mappers", "JsonMapperModule");
+        ClassName jsonMapperRegistry = ClassName.get("io.github.flameyossnowy.uniform.json.mappers", "JsonMapperRegistry");
+        ClassName jsonConfig         = ClassName.get("io.github.flameyossnowy.uniform.json", "JsonConfig");
 
         MethodSpec register = MethodSpec.methodBuilder("register")
             .addAnnotation(Override.class)
@@ -1321,13 +1321,13 @@ public final class UniformJsonProcessor extends AbstractProcessor {
     }
 
     private void writeAggregatorModule(List<ClassName> modules) throws IOException {
-        ClassName moduleInterface = ClassName.get("me.flame.uniform.json.mappers", "JsonMapperModule");
-        ClassName registryType    = ClassName.get("me.flame.uniform.json.mappers", "JsonMapperRegistry");
+        ClassName moduleInterface = ClassName.get("io.github.flameyossnowy.uniform.json.mappers", "JsonMapperModule");
+        ClassName registryType    = ClassName.get("io.github.flameyossnowy.uniform.json.mappers", "JsonMapperRegistry");
 
         String requestedName = processingEnv.getOptions().get("uniform.generatedModule");
         String moduleSimpleName = (requestedName == null || requestedName.isBlank())
             ? "UniformGeneratedJsonModule" : requestedName.trim();
-        ClassName aggregatorName = ClassName.get("me.flame.uniform.generated", moduleSimpleName);
+        ClassName aggregatorName = ClassName.get("io.github.flameyossnowy.uniform.generated", moduleSimpleName);
 
         MethodSpec.Builder register = MethodSpec.methodBuilder("register")
             .addAnnotation(Override.class)
@@ -1348,7 +1348,7 @@ public final class UniformJsonProcessor extends AbstractProcessor {
 
         JavaFile.builder(aggregatorName.packageName(), aggregator).build().writeTo(processingEnv.getFiler());
 
-        String servicesFile = "META-INF/services/me.flame.uniform.json.mappers.JsonMapperModule";
+        String servicesFile = "META-INF/services/io.github.flameyossnowy.uniform.json.mappers.JsonMapperModule";
         try {
             try (var out = processingEnv.getFiler()
                 .createResource(javax.tools.StandardLocation.CLASS_OUTPUT, "", servicesFile)

@@ -53,10 +53,10 @@ public final class JsonMapperRegistry {
         if (!loadedAny) {
             String override = System.getProperty("uniform.generatedModule");
             if (override != null && !override.isBlank()) {
-                tryRegisterByName(registry, "me.flame.uniform.generated." + override.trim(), cfg);
+                tryRegisterByName(registry, "io.github.flameyossnowy.uniform.generated." + override.trim(), cfg);
             }
-            tryRegisterByName(registry, "me.flame.uniform.generated.UniformGeneratedJsonModule", cfg);
-            tryRegisterByName(registry, "me.flame.uniform.generated.UniformGeneratedJsonModuleJmh", cfg);
+            tryRegisterByName(registry, "io.github.flameyossnowy.uniform.generated.UniformGeneratedJsonModule", cfg);
+            tryRegisterByName(registry, "io.github.flameyossnowy.uniform.generated.UniformGeneratedJsonModuleJmh", cfg);
         }
 
         bootstrapped = true;
@@ -68,10 +68,10 @@ public final class JsonMapperRegistry {
         }
         String override = System.getProperty("uniform.generatedModule");
         if (override != null && !override.isBlank()) {
-            tryRegisterByName(registry, "me.flame.uniform.generated." + override.trim(), config);
+            tryRegisterByName(registry, "io.github.flameyossnowy.uniform.generated." + override.trim(), config);
         }
-        tryRegisterByName(registry, "me.flame.uniform.generated.UniformGeneratedJsonModule", config);
-        tryRegisterByName(registry, "me.flame.uniform.generated.UniformGeneratedJsonModuleJmh", config);
+        tryRegisterByName(registry, "io.github.flameyossnowy.uniform.generated.UniformGeneratedJsonModule", config);
+        tryRegisterByName(registry, "io.github.flameyossnowy.uniform.generated.UniformGeneratedJsonModuleJmh", config);
     }
 
     private static void tryRegisterByName(JsonMapperRegistry registry, String fqcn, JsonConfig config) {
@@ -136,9 +136,9 @@ public final class JsonMapperRegistry {
         JsonConfig cfg = activeConfig;
         String override = System.getProperty("uniform.generatedModule");
         if (override != null && !override.isBlank()) {
-            tryRegisterByName(registry, "me.flame.uniform.generated." + override.trim(), cfg);
+            tryRegisterByName(registry, "io.github.flameyossnowy.uniform.generated." + override.trim(), cfg);
         }
-        tryRegisterByName(registry, "me.flame.uniform.generated.UniformGeneratedJsonModule", cfg);
-        tryRegisterByName(registry, "me.flame.uniform.generated.UniformGeneratedJsonModuleJmh", cfg);
+        tryRegisterByName(registry, "io.github.flameyossnowy.uniform.generated.UniformGeneratedJsonModule", cfg);
+        tryRegisterByName(registry, "io.github.flameyossnowy.uniform.generated.UniformGeneratedJsonModuleJmh", cfg);
     }
 }

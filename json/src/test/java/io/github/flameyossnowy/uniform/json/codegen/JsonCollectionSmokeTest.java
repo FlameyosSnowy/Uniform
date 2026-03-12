@@ -10,7 +10,7 @@ import io.github.flameyossnowy.uniform.json.features.JsonReadFeature;
 import io.github.flameyossnowy.uniform.json.features.JsonWriteFeature;
 import io.github.flameyossnowy.uniform.json.JsonAdapter;
 import io.github.flameyossnowy.uniform.json.JsonConfig;
-import me.flame.uniform.json.codegen.fixtures.*;
+import io.github.flameyossnowy.uniform.json.codegen.fixtures.*;
 import io.github.flameyossnowy.uniform.json.writers.prettifiers.JsonFormatter;
 import org.junit.jupiter.api.Test;
 
@@ -41,6 +41,7 @@ public class JsonCollectionSmokeTest {
         );
 
         String json = ADAPTER.writeValue(original);
+        System.out.println(json);
         assertTrue(json.contains("\"label\":\"test\""));
         assertTrue(json.contains("\"tags\":[\"alpha\",\"beta\",\"gamma\"]"));
         assertTrue(json.contains("\"scores\":[10,20,30]"));

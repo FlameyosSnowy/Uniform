@@ -62,8 +62,8 @@ All benchmarks run with JMH in throughput mode (`ops/ms`, higher is better) on J
 
 ```kotlin
 dependencies {
-    implementation("me.flame.uniform:json:1.0.0")
-    annotationProcessor("me.flame.uniform:annotation-processor:1.0.0")
+    implementation("io.github.flameyossnowy.uniform:json:1.5.5")
+    annotationProcessor("io.github.flameyossnowy.uniform:annotation-processor:1.5.5")
 }
 
 tasks.withType<JavaCompile> {
@@ -84,9 +84,9 @@ application {
 
 ```xml
 <dependency>
-    <groupId>me.flame.uniform</groupId>
+    <groupId>io.github.flameyossnowy.uniform</groupId>
     <artifactId>json</artifactId>
-    <version>1.0.0</version>
+    <version>1.5.5</version>
 </dependency>
 
 <plugin>
@@ -95,9 +95,9 @@ application {
     <configuration>
         <annotationProcessorPaths>
             <path>
-                <groupId>me.flame.uniform</groupId>
+                <groupId>io.github.flameyossnowy.uniform</groupId>
                 <artifactId>annotation-processor</artifactId>
-                <version>1.0.0</version>
+                <version>1.5.5</version>
             </path>
         </annotationProcessorPaths>
         <compilerArgs>

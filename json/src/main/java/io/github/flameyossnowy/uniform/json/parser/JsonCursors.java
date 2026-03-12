@@ -1,7 +1,7 @@
 package io.github.flameyossnowy.uniform.json.parser;
 
-import me.flame.turboscanner.ScanResult;
-import me.flame.turboscanner.VectorByteScanner;
+import io.github.flameyossnowy.turboscanner.ScanResult;
+import io.github.flameyossnowy.turboscanner.VectorByteScanner;
 import io.github.flameyossnowy.uniform.json.JsonConfig;
 import io.github.flameyossnowy.uniform.json.parser.lowlevel.JsonCursor;
 import io.github.flameyossnowy.uniform.json.parser.lowlevel.MapJsonCursor;

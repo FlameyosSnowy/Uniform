@@ -1,8 +1,8 @@
 package io.github.flameyossnowy.uniform.json.tokenizer;
 
-import me.flame.turboscanner.ByteUtf8Validator;
-import me.flame.turboscanner.ScanResult;
-import me.flame.turboscanner.VectorByteScanner;
+import io.github.flameyossnowy.turboscanner.ByteUtf8Validator;
+import io.github.flameyossnowy.turboscanner.ScanResult;
+import io.github.flameyossnowy.turboscanner.VectorByteScanner;
 import io.github.flameyossnowy.uniform.json.exceptions.Exceptions;
 import io.github.flameyossnowy.uniform.json.exceptions.JsonException;
 import org.jetbrains.annotations.NotNull;

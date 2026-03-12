@@ -12,7 +12,7 @@ import io.github.flameyossnowy.uniform.json.features.JsonWriteFeature;
 import io.github.flameyossnowy.uniform.core.resolvers.ResolverRegistry;
 import io.github.flameyossnowy.uniform.json.JsonAdapter;
 import io.github.flameyossnowy.uniform.json.JsonConfig;
-import me.flame.uniform.json.codegen.fixtures.*;
+import io.github.flameyossnowy.uniform.json.codegen.fixtures.*;
 import io.github.flameyossnowy.uniform.json.dom.JsonArray;
 import io.github.flameyossnowy.uniform.json.dom.JsonObject;
 import io.github.flameyossnowy.uniform.json.dom.JsonValue;

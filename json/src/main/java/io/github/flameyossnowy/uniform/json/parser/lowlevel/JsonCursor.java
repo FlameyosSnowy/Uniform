@@ -2,7 +2,7 @@ package io.github.flameyossnowy.uniform.json.parser.lowlevel;
 
 import jdk.incubator.vector.ByteVector;
 import jdk.incubator.vector.VectorSpecies;
-import me.flame.turboscanner.ScanResult;
+import io.github.flameyossnowy.turboscanner.ScanResult;
 import io.github.flameyossnowy.uniform.json.JsonConfig;
 import io.github.flameyossnowy.uniform.json.dom.JsonArray;
 import io.github.flameyossnowy.uniform.json.dom.JsonBoolean;

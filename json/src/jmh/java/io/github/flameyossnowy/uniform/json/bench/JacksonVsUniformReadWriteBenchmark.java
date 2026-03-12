@@ -21,7 +21,7 @@ import tools.jackson.databind.ObjectMapper;
 import com.google.gson.Gson;
 import io.github.flameyossnowy.uniform.json.JsonAdapter;
 import io.github.flameyossnowy.uniform.json.JsonConfig;
-import me.flame.uniform.json.bench.fixtures.*;
+import io.github.flameyossnowy.uniform.json.bench.fixtures.*;
 import org.openjdk.jmh.annotations.*;
 import tools.jackson.databind.json.JsonMapper;
 
