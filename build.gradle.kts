@@ -1,43 +1,251 @@
 plugins {
-    id("java")
+    `java-library`
+    signing
+    application
     id("me.champeau.jmh") version "0.7.3"
+    id("com.vanniktech.maven.publish") version "0.33.0"
 }
 
-group = "me.flame.uniform"
-version = "1.5.2"
+group = "me.flame"
+version = "1.5.4"
 
 java {
     toolchain {
         languageVersion.set(JavaLanguageVersion.of(17))
     }
+    withSourcesJar()
+    withJavadocJar()
 }
 
 repositories {
     mavenCentral()
-    maven("https://jitpack.io/")
+}
+
+subprojects {
+    apply(plugin = "java-library")
+    apply(plugin = "me.champeau.jmh")
+    apply(plugin = "com.vanniktech.maven.publish")
+    apply(plugin = "application")
+    apply(plugin = "signing")
+
+    java {
+        withSourcesJar()
+        withJavadocJar()
+    }
+
+    tasks.withType<Test>().configureEach {
+        useJUnitPlatform()
+        failOnNoDiscoveredTests = false
+        jvmArgs("--add-modules", "jdk.incubator.vector")
+    }
+
+    dependencies {
+        // JMH for benchmarks
+        testImplementation("org.openjdk.jmh:jmh-core:1.37")
+        testAnnotationProcessor("org.openjdk.jmh:jmh-generator-annprocess:1.37")
+
+        compileOnly("org.jetbrains:annotations:26.0.2")
+    }
+
+    // Maven publishing with full POM metadata
+    configure<com.vanniktech.maven.publish.MavenPublishBaseExtension> {
+        coordinates(group as String, "uniform-${project.name}", version as String)
+
+        pom {
+            name.set("Uniform - ${project.name}")
+            description.set(
+                when (project.name) {
+                    "core" -> "High-performance core library for Uniform serialization"
+                    "annotation-processor" -> "Annotation processor for Uniform to generate serializers"
+                    "json" -> "JSON module for Uniform serialization"
+                    else -> "Uniform module ${project.name}"
+                }
+            )
+            inceptionYear.set("2026")
+            url.set("https://github.com/FlameyosSnowy/Uniform")
+            licenses {
+                license {
+                    name.set("MIT")
+                    url.set("https://opensource.org/licenses/MIT")
+                    distribution.set("https://mit-license.org/")
+                }
+            }
+            developers {
+                developer {
+                    id.set("flameyosflow")
+                    name.set("FlameyosFlow")
+                    url.set("https://github.com/FlameyosSnowy/")
+                }
+            }
+            scm {
+                url.set("https://github.com/FlameyosSnowy/Uniform")
+                connection.set("scm:git:git://github.com/FlameyosSnowy/Uniform.git")
+                developerConnection.set("scm:git:ssh://git@github.com/FlameyosSnowy/Uniform.git")
+            }
+        }
+
+        publishToMavenCentral()
+        signAllPublications()
+    }
+
+    signing {
+        useGpgCmd()
+    }
+
+    tasks.withType<Test>().configureEach {
+        jvmArgs("--add-modules", "jdk.incubator.vector")
+    }
+
+    application {
+        applicationDefaultJvmArgs = listOf("--add-modules", "jdk.incubator.vector")
+    }
+
+    afterEvaluate {
+        tasks.named<com.vanniktech.maven.publish.tasks.JavadocJar>("plainJavadocJar") {
+            dependsOn(tasks.named("javadoc"))
+            archiveClassifier.set("javadoc")
+            from(tasks.named<Javadoc>("javadoc"))
+        }
+
+        // Ensure metadata generation depends on Javadoc
+        tasks.named("generateMetadataFileForMavenPublication") {
+            dependsOn(tasks.named("plainJavadocJar"))
+        }
+
+        // Make publish depend on the Javadoc artifact
+        tasks.named("publish") {
+            dependsOn(tasks.named("plainJavadocJar"))
+        }
+    }
+}
+
+/*
+plugins {
+    `java-library`
+    signing
+    id("application")
+    id("me.champeau.jmh") version "0.7.2"
+    id("com.vanniktech.maven.publish") version "0.33.0"
+}
+
+group = "io.github.flameyossnowy"
+version = "1.4.0"
+
+java {
+    toolchain {
+        languageVersion.set(JavaLanguageVersion.of(17))
+    }
+    withSourcesJar()
+    //withJavadocJar()
+}
+
+repositories {
+    mavenCentral()
 }
 
 dependencies {
-    implementation("com.github.FlameyosSnowy:TurboScanner:1.2.2")
+    jmh("org.openjdk.jmh:jmh-core:1.37")
+    jmhAnnotationProcessor("org.openjdk.jmh:jmh-generator-annprocess:1.37")
+
+    compileOnly("org.jetbrains:annotations:26.0.2")
 
     testImplementation(platform("org.junit:junit-bom:5.10.0"))
     testImplementation("org.junit.jupiter:junit-jupiter")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
-
-    testImplementation("org.openjdk.jmh:jmh-core:1.37")
-    testAnnotationProcessor("org.openjdk.jmh:jmh-generator-annprocess:1.37")
-
-    compileOnly("org.jetbrains:annotations:26.0.2")
 }
 
 tasks.test {
     useJUnitPlatform()
 }
 
-subprojects {
-    tasks.withType<Test>().configureEach {
-        useJUnitPlatform()
-        failOnNoDiscoveredTests = false
-        jvmArgs("--add-modules", "jdk.incubator.vector")
+tasks.withType<Test>().configureEach {
+    jvmArgs("--add-modules=jdk.incubator.vector")
+}
+
+application {
+    applicationDefaultJvmArgs = listOf("--add-modules=jdk.incubator.vector")
+}
+
+tasks.withType<JavaCompile>().configureEach {
+    options.compilerArgs.addAll(listOf("--add-modules", "jdk.incubator.vector"))
+}
+
+jmh {
+    javaLauncher.set(
+        javaToolchains.launcherFor {
+            languageVersion.set(JavaLanguageVersion.of(17))
+        }
+    )
+    jvmArgs.add("--add-modules=jdk.incubator.vector")
+    warmupIterations.set(5)
+    iterations.set(10)
+    fork.set(2)
+    timeUnit.set("ns")
+    benchmarkMode.set(listOf("thrpt", "avgt"))
+    resultFormat.set("JSON")
+}
+
+configure<com.vanniktech.maven.publish.MavenPublishBaseExtension> {
+    coordinates(group as String, "turboscanner", version as String)
+
+    pom {
+        name.set("TurboScanner")
+        description.set("High-performance and lightweight SIMD library for byte scanning and classification")
+        inceptionYear.set("2026")
+        url.set("https://github.com/FlameyosSnowy/TurboScanner")
+        licenses {
+            license {
+                name.set("MIT")
+                url.set("https://opensource.org/licenses/MIT")
+                distribution.set("https://mit-license.org/")
+            }
+        }
+        developers {
+            developer {
+                id.set("flameyosflow")
+                name.set("FlameyosFlow")
+                url.set("https://github.com/FlameyosSnowy/")
+            }
+        }
+        scm {
+            url.set("https://github.com/FlameyosSnowy/TurboScanner")
+            connection.set("scm:git:git://github.com/FlameyosSnowy/TurboScanner.git")
+            developerConnection.set("scm:git:ssh://git@github.com/FlameyosSnowy/TurboScanner.git")
+        }
+    }
+
+    publishToMavenCentral()
+    signAllPublications()
+}
+
+
+signing {
+    useGpgCmd()
+}
+
+tasks.withType<Test>().configureEach {
+    jvmArgs("--add-modules", "jdk.incubator.vector")
+}
+
+application {
+    applicationDefaultJvmArgs = listOf("--add-modules", "jdk.incubator.vector")
+}
+
+afterEvaluate {
+    tasks.named<com.vanniktech.maven.publish.tasks.JavadocJar>("plainJavadocJar") {
+        dependsOn(tasks.named("javadoc"))
+        archiveClassifier.set("javadoc")
+        from(tasks.named<Javadoc>("javadoc"))
+    }
+
+    // Ensure metadata generation depends on Javadoc
+    tasks.named("generateMetadataFileForMavenPublication") {
+        dependsOn(tasks.named("plainJavadocJar"))
+    }
+
+    // Make publish depend on the Javadoc artifact
+    tasks.named("publish") {
+        dependsOn(tasks.named("plainJavadocJar"))
     }
 }
+ */

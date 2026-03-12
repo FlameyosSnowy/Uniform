@@ -5,16 +5,6 @@
       <profile name="Gradle Imported" enabled="true">
         <outputRelativeToContentRoot value="true" />
         <processorPath useClasspath="false">
-          <entry name="$PROJECT_DIR$/../.gradle/caches/modules-2/files-2.1/org.openjdk.jmh/jmh-generator-annprocess/1.37/da93888682df163144edf9b13d2b78e54166063a/jmh-generator-annprocess-1.37.jar" />
-          <entry name="$PROJECT_DIR$/../.gradle/caches/modules-2/files-2.1/org.openjdk.jmh/jmh-core/1.37/896f27e49105b35ea1964319c83d12082e7a79ef/jmh-core-1.37.jar" />
-          <entry name="$PROJECT_DIR$/../.gradle/caches/modules-2/files-2.1/net.sf.jopt-simple/jopt-simple/5.0.4/4fdac2fbe92dfad86aa6e9301736f6b4342a3f5c/jopt-simple-5.0.4.jar" />
-          <entry name="$PROJECT_DIR$/../.gradle/caches/modules-2/files-2.1/org.apache.commons/commons-math3/3.6.1/e4ba98f1d4b3c80ec46392f25e094a6a2e58fcbf/commons-math3-3.6.1.jar" />
-        </processorPath>
-        <module name="Uniform.test" />
-      </profile>
-      <profile name="Gradle Imported" enabled="true">
-        <outputRelativeToContentRoot value="true" />
-        <processorPath useClasspath="false">
           <entry name="$PROJECT_DIR$/../.gradle/caches/modules-2/files-2.1/com.google.auto.service/auto-service/1.1.1/bfeb4c40087b49e23700f074807d3f2a6d36d2d1/auto-service-1.1.1.jar" />
           <entry name="$PROJECT_DIR$/../.gradle/caches/modules-2/files-2.1/com.google.auto.service/auto-service-annotations/1.1.1/da12a15cd058ba90a0ff55357fb521161af4736d/auto-service-annotations-1.1.1.jar" />
           <entry name="$PROJECT_DIR$/../.gradle/caches/modules-2/files-2.1/com.google.auto/auto-common/1.2.1/f6da26895f759010f5f170c8044e84c1b17ef83e/auto-common-1.2.1.jar" />
@@ -30,37 +20,17 @@
       </profile>
       <profile name="Gradle Imported" enabled="true">
         <outputRelativeToContentRoot value="true" />
-        <option name="uniform.generatedModule" value="UniformGeneratedJsonModuleJmh" />
         <processorPath useClasspath="false">
-          <entry name="$PROJECT_DIR$/../.gradle/caches/modules-2/files-2.1/com.dslplatform/dsl-json/2.0.2/828e5cd5973c1fd7390a1d3208e7909d6ce73c23/dsl-json-2.0.2.jar" />
-          <entry name="$PROJECT_DIR$/annotation-processor/build/libs/annotation-processor-1.5.2.jar" />
-          <entry name="$PROJECT_DIR$/core/build/libs/core-1.5.2.jar" />
-          <entry name="$PROJECT_DIR$/../.gradle/caches/modules-2/files-2.1/com.palantir.javapoet/javapoet/0.6.0/af672742c040ee7c6dd39bf7179d06858a98be83/javapoet-0.6.0.jar" />
-        </processorPath>
-        <module name="Uniform.json.jmh" />
-      </profile>
-      <profile name="Gradle Imported" enabled="true">
-        <outputRelativeToContentRoot value="true" />
-        <processorPath useClasspath="false">
-          <entry name="$PROJECT_DIR$/annotation-processor/build/libs/annotation-processor-1.5.2.jar" />
           <entry name="$PROJECT_DIR$/../.gradle/caches/modules-2/files-2.1/org.openjdk.jmh/jmh-generator-annprocess/1.37/da93888682df163144edf9b13d2b78e54166063a/jmh-generator-annprocess-1.37.jar" />
-          <entry name="$PROJECT_DIR$/core/build/libs/core-1.5.2.jar" />
-          <entry name="$PROJECT_DIR$/../.gradle/caches/modules-2/files-2.1/com.palantir.javapoet/javapoet/0.6.0/af672742c040ee7c6dd39bf7179d06858a98be83/javapoet-0.6.0.jar" />
           <entry name="$PROJECT_DIR$/../.gradle/caches/modules-2/files-2.1/org.openjdk.jmh/jmh-core/1.37/896f27e49105b35ea1964319c83d12082e7a79ef/jmh-core-1.37.jar" />
           <entry name="$PROJECT_DIR$/../.gradle/caches/modules-2/files-2.1/net.sf.jopt-simple/jopt-simple/5.0.4/4fdac2fbe92dfad86aa6e9301736f6b4342a3f5c/jopt-simple-5.0.4.jar" />
           <entry name="$PROJECT_DIR$/../.gradle/caches/modules-2/files-2.1/org.apache.commons/commons-math3/3.6.1/e4ba98f1d4b3c80ec46392f25e094a6a2e58fcbf/commons-math3-3.6.1.jar" />
         </processorPath>
+        <module name="Uniform.annotation-processor.test" />
+        <module name="Uniform.core.test" />
         <module name="Uniform.json.test" />
       </profile>
     </annotationProcessing>
     <bytecodeTargetLevel target="17" />
-  </component>
-  <component name="JavacSettings">
-    <option name="ADDITIONAL_OPTIONS_OVERRIDE">
-      <module name="Uniform.json" options="--add-modules jdk.incubator.vector --enable-preview -source 17" />
-      <module name="Uniform.json.jmh" options="--add-modules jdk.incubator.vector --enable-preview -source 17 --add-modules jdk.incubator.vector --enable-preview -source 17 -Auniform.generatedModule=UniformGeneratedJsonModuleJmh" />
-      <module name="Uniform.json.main" options="--add-modules jdk.incubator.vector --enable-preview -source 17" />
-      <module name="Uniform.json.test" options="--add-modules jdk.incubator.vector --enable-preview -source 17" />
-    </option>
   </component>
 </project>

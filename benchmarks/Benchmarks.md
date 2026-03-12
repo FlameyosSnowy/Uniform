@@ -111,7 +111,7 @@ Results are written to `json/build/results/jmh/results.json`.
 
 To run only the read/write benchmark:
 ```bash
-./gradlew :json:jmh --tests "me.flame.uniform.json.bench.JacksonVsUniformReadWriteBenchmark"
+./gradlew :json:jmh --tests "bench.io.github.flameyossnowy.uniform.json.JacksonVsUniformReadWriteBenchmark"
 ```
 
 To run only pretty-print:

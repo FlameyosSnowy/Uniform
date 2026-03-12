@@ -1,14 +1,5 @@
 plugins {
-    id("java")
-}
-
-group = "me.flame.uniform"
-version = "1.5.2"
-
-java {
-    toolchain {
-        languageVersion.set(JavaLanguageVersion.of(17))
-    }
+    `java-library`
 }
 
 repositories {
@@ -17,7 +8,6 @@ repositories {
 
 dependencies {
     implementation(project(":core"))
-
     implementation("com.palantir.javapoet:javapoet:0.6.0")
 
     compileOnly("com.google.auto.service:auto-service-annotations:1.1.1")

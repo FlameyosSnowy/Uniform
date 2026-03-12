@@ -1,14 +1,5 @@
 plugins {
-    id("java")
-}
-
-group = "me.flame.uniform.core"
-version = "1.5.2"
-
-java {
-    toolchain {
-        languageVersion.set(JavaLanguageVersion.of(17))
-    }
+    `java-library`
 }
 
 repositories {

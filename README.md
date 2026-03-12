@@ -115,7 +115,7 @@ application {
 ### 1. Annotate your class
 
 ```java
-import me.flame.uniform.core.annotations.SerializedObject;
+import annotations.io.github.flameyossnowy.uniform.core.SerializedObject;
 
 @SerializedObject
 public class Product {
