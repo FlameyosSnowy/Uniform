@@ -3,7 +3,7 @@ package io.github.flameyossnowy.uniform.json.codegen.fixtures;
 import io.github.flameyossnowy.uniform.core.annotations.SerializedObject;
 import java.util.List;
 
-@SerializedObject
+
 public class PojoWithList {
     public String label;
     public List<String> tags;

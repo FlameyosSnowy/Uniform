@@ -1,5 +1,6 @@
 package io.github.flameyossnowy.uniform.json.codegen;
 
+import io.github.flameyossnowy.uniform.json.ReflectionConfig;
 import io.github.flameyossnowy.uniform.json.codegen.fixtures.PojoWithArray;
 import io.github.flameyossnowy.uniform.json.codegen.fixtures.PojoWithList;
 import io.github.flameyossnowy.uniform.json.codegen.fixtures.PojoWithMap;
@@ -10,7 +11,6 @@ import io.github.flameyossnowy.uniform.json.features.JsonReadFeature;
 import io.github.flameyossnowy.uniform.json.features.JsonWriteFeature;
 import io.github.flameyossnowy.uniform.json.JsonAdapter;
 import io.github.flameyossnowy.uniform.json.JsonConfig;
-import io.github.flameyossnowy.uniform.json.codegen.fixtures.*;
 import io.github.flameyossnowy.uniform.json.writers.prettifiers.JsonFormatter;
 import org.junit.jupiter.api.Test;
 
@@ -26,7 +26,7 @@ public class JsonCollectionSmokeTest {
     private static JsonConfig config() {
         return new JsonConfig(false, 2,
             EnumSet.noneOf(JsonReadFeature.class),
-            EnumSet.noneOf(JsonWriteFeature.class));
+            EnumSet.noneOf(JsonWriteFeature.class), ReflectionConfig.DEFAULT);
     }
 
     private static final JsonAdapter ADAPTER = new JsonAdapter(config());

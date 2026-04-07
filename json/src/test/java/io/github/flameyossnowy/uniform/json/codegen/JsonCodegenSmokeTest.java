@@ -1,5 +1,6 @@
 package io.github.flameyossnowy.uniform.json.codegen;
 
+import io.github.flameyossnowy.uniform.json.ReflectionConfig;
 import io.github.flameyossnowy.uniform.json.codegen.fixtures.Circle;
 import io.github.flameyossnowy.uniform.json.codegen.fixtures.HasShape;
 import io.github.flameyossnowy.uniform.json.codegen.fixtures.NestedPojo;
@@ -12,7 +13,6 @@ import io.github.flameyossnowy.uniform.json.features.JsonWriteFeature;
 import io.github.flameyossnowy.uniform.core.resolvers.ResolverRegistry;
 import io.github.flameyossnowy.uniform.json.JsonAdapter;
 import io.github.flameyossnowy.uniform.json.JsonConfig;
-import io.github.flameyossnowy.uniform.json.codegen.fixtures.*;
 import io.github.flameyossnowy.uniform.json.dom.JsonArray;
 import io.github.flameyossnowy.uniform.json.dom.JsonObject;
 import io.github.flameyossnowy.uniform.json.dom.JsonValue;
@@ -31,7 +31,7 @@ public class JsonCodegenSmokeTest {
 
     private static JsonConfig config() {
         return new JsonConfig(false, 2, EnumSet.noneOf(JsonReadFeature.class),
-            EnumSet.noneOf(JsonWriteFeature.class));
+            EnumSet.noneOf(JsonWriteFeature.class), ReflectionConfig.DEFAULT);
     }
 
     @Test
@@ -142,6 +142,7 @@ public class JsonCodegenSmokeTest {
         assertEquals("z", rec.name());
 
         String json = adapter.writeValue(new SimpleRecord(7, "q"));
+        System.out.println(json);
         assertTrue(json.contains("\"id\":7"));
         assertTrue(json.contains("\"name\":\"q\""));
     }

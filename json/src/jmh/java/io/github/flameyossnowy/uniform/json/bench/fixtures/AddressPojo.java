@@ -3,7 +3,7 @@ package io.github.flameyossnowy.uniform.json.bench.fixtures;
 import com.dslplatform.json.CompiledJson;
 import io.github.flameyossnowy.uniform.core.annotations.SerializedObject;
 
-@SerializedObject
+
 @CompiledJson
 public class AddressPojo {
     public String street;

@@ -21,7 +21,6 @@ import tools.jackson.databind.ObjectMapper;
 import com.google.gson.Gson;
 import io.github.flameyossnowy.uniform.json.JsonAdapter;
 import io.github.flameyossnowy.uniform.json.JsonConfig;
-import io.github.flameyossnowy.uniform.json.bench.fixtures.*;
 import org.openjdk.jmh.annotations.*;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -169,7 +168,7 @@ public class JacksonVsUniformReadWriteLatencyBenchmark {
 
         JsonConfig cfg = new JsonConfig(false, 2,
             EnumSet.noneOf(JsonReadFeature.class),
-            EnumSet.noneOf(JsonWriteFeature.class));
+            EnumSet.noneOf(JsonWriteFeature.class), reflectionConfig);
         uniform = new JsonAdapter(cfg);
 
         simpleJson  = "{\"id\":1,\"name\":\"a\"}";

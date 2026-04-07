@@ -7,15 +7,7 @@ plugins {
 }
 
 group = "io.github.flameyossnowy"
-version = "1.5.5"
-
-java {
-    toolchain {
-        languageVersion.set(JavaLanguageVersion.of(17))
-    }
-    withSourcesJar()
-    withJavadocJar()
-}
+version = "1.5.8"
 
 repositories {
     mavenCentral()
@@ -25,12 +17,21 @@ subprojects {
     apply(plugin = "java-library")
     apply(plugin = "me.champeau.jmh")
     apply(plugin = "com.vanniktech.maven.publish")
-    apply(plugin = "application")
     apply(plugin = "signing")
 
+    group = rootProject.group
+    version = rootProject.version
+
     java {
+        toolchain {
+            languageVersion.set(JavaLanguageVersion.of(25))
+        }
         withSourcesJar()
-        withJavadocJar()
+        //withJavadocJar()
+    }
+
+    repositories {
+        mavenCentral()
     }
 
     tasks.withType<Test>().configureEach {
@@ -49,7 +50,11 @@ subprojects {
 
     // Maven publishing with full POM metadata
     configure<com.vanniktech.maven.publish.MavenPublishBaseExtension> {
-        coordinates(group as String, "uniform-${project.name}", version as String)
+        coordinates(
+            group as String,
+            "uniform-${project.name.lowercase().replace("_", "-")}",
+            version as String
+        )
 
         pom {
             name.set("Uniform - ${project.name}")
@@ -88,33 +93,29 @@ subprojects {
         signAllPublications()
     }
 
-    signing {
-        useGpgCmd()
+signing {
+    useGpgCmd()
+}
+
+tasks.withType<Test>().configureEach {
+    jvmArgs("--add-modules", "jdk.incubator.vector")
+}
+
+afterEvaluate {
+    tasks.named<com.vanniktech.maven.publish.tasks.JavadocJar>("plainJavadocJar") {
+        dependsOn(tasks.named("javadoc"))
+        archiveClassifier.set("javadoc")
+        from(tasks.named<Javadoc>("javadoc"))
     }
 
-    tasks.withType<Test>().configureEach {
-        jvmArgs("--add-modules", "jdk.incubator.vector")
+    // Ensure metadata generation depends on Javadoc
+    tasks.named("generateMetadataFileForMavenPublication") {
+        dependsOn(tasks.named("plainJavadocJar"))
     }
 
-    application {
-        applicationDefaultJvmArgs = listOf("--add-modules", "jdk.incubator.vector")
+    // Make publish depend on the Javadoc artifact
+    tasks.named("publish") {
+        dependsOn(tasks.named("plainJavadocJar"))
     }
-
-    afterEvaluate {
-        tasks.named<com.vanniktech.maven.publish.tasks.JavadocJar>("plainJavadocJar") {
-            dependsOn(tasks.named("javadoc"))
-            archiveClassifier.set("javadoc")
-            from(tasks.named<Javadoc>("javadoc"))
-        }
-
-        // Ensure metadata generation depends on Javadoc
-        tasks.named("generateMetadataFileForMavenPublication") {
-            dependsOn(tasks.named("plainJavadocJar"))
-        }
-
-        // Make publish depend on the Javadoc artifact
-        tasks.named("publish") {
-            dependsOn(tasks.named("plainJavadocJar"))
-        }
-    }
+}
 }

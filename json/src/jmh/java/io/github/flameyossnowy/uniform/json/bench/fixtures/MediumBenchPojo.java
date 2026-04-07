@@ -4,7 +4,7 @@ import com.dslplatform.json.CompiledJson;
 import io.github.flameyossnowy.uniform.core.annotations.SerializedObject;
 import java.util.List;
 
-@SerializedObject
+
 @CompiledJson
 public class MediumBenchPojo {
     public int id;
