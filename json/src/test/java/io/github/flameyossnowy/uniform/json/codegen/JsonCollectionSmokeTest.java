@@ -118,6 +118,7 @@ public class JsonCollectionSmokeTest {
         );
 
         String json = ADAPTER.writeValue(original);
+        System.out.println(json);
         assertTrue(json.contains("\"counts\":[1,2,3]"));
         assertTrue(json.contains("\"names\":[\"x\",\"y\",\"z\"]"));
 

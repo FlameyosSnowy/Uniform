@@ -123,6 +123,11 @@ public final class JsonObjectCursor implements JsonReadCursor {
         return true;
     }
 
+    @Override
+    public void skipFieldValue() {
+        if (currentValue == null) return;
+        currentValue = null;
+    }
 
     @Override
     public @NotNull ByteSlice fieldName() {

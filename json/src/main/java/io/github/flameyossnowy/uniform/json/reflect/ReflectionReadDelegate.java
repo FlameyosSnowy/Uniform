@@ -38,6 +38,7 @@ public final class ReflectionReadDelegate {
             String fieldName = cursor.fieldNameAsString();
             Integer idx = index.get(fieldName);
             if (idx == null) {
+                cursor.skipFieldValue();
                 continue;
             }
             ReflectionMetadata.Property prop = props.get(idx);

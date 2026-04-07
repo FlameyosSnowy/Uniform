@@ -91,6 +91,12 @@ public final class MapJsonCursor implements JsonReadCursor {
     }
 
     @Override
+    public void skipFieldValue() {
+        if (currentValue == null) return;
+        currentValue = null;
+    }
+
+    @Override
     public boolean enterObject() {
         if (entered) return false;
 

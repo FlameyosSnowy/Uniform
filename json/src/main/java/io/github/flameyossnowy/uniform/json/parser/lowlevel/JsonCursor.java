@@ -479,9 +479,26 @@ public final class JsonCursor implements JsonReadCursor {
         return v;
     }
 
+    @Override
     public void skipFieldValue() {
-        pos = fieldValueStart;
-        skipValueFull();
+        int p = fieldValueStart;
+        pos = p;
+
+        if (p >= limit) return;
+
+        final byte tok = TOKEN[input[p] & 0xFF];
+
+        // Fast-path dispatch (avoid extra branching inside skipValueFull)
+        if (tok == TOK_QUOTE) {
+            pos = findStringEnd(p) + 1;
+        } else if (allowSingleQuotes && tok == TOK_SQUOTE) {
+            pos = findStringEndManual(p, (byte) '\'') + 1;
+        } else if (tok == TOK_OBJ_OPEN || tok == TOK_ARR_OPEN) {
+            pos = skipValueEnd(p);
+        } else {
+            skipScalar();
+        }
+
         finishFieldAfterValue();
     }
 

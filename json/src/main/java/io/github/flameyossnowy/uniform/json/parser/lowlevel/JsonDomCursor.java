@@ -72,6 +72,12 @@ public final class JsonDomCursor implements JsonReadCursor {
     private Map.Entry<String, JsonValue> currentEntry;
 
     @Override
+    public void skipFieldValue() {
+        if (currentEntry == null) return;
+        currentEntry = null;
+    }
+
+    @Override
     public boolean nextField() {
         if (objectEntries == null) return false;
         objectIndex++;

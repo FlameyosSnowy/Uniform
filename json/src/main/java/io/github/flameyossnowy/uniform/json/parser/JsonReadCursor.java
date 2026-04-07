@@ -82,6 +82,8 @@ public interface JsonReadCursor {
     // Field name access
     // =========================================================
 
+    void skipFieldValue();
+
     /**
      * Returns the current field name as a {@link ByteSlice}.
      * Only valid after a successful {@link #nextField()} call.
