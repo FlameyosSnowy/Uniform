@@ -11,6 +11,7 @@ import io.github.flameyossnowy.uniform.json.mappers.JsonWriterMapper;
 import io.github.flameyossnowy.uniform.json.parser.JsonCursors;
 import io.github.flameyossnowy.uniform.json.parser.lowlevel.JsonCursor;
 import io.github.flameyossnowy.uniform.json.parser.lowlevel.JsonDomCursor;
+import io.github.flameyossnowy.uniform.json.parser.lowlevel.JsonObjectCursor;
 import io.github.flameyossnowy.uniform.json.parser.lowlevel.MapJsonCursor;
 import io.github.flameyossnowy.uniform.json.resolvers.CoreTypeResolver;
 import io.github.flameyossnowy.uniform.json.resolvers.CoreTypeResolverRegistry;
@@ -25,6 +26,7 @@ import org.jetbrains.annotations.Nullable;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -63,6 +65,12 @@ public record JsonAdapter(JsonConfig config, Executor executor) {
     public <T> T readValue(@NotNull String json, Class<T> type) {
         byte[] bytes = json.getBytes(StandardCharsets.UTF_8);
         return readValue(bytes, type);
+    }
+
+    public <T> T readValue(@NotNull JsonValue json, Class<T> type) {
+        JsonMapper<T> mapper = (JsonMapper<T>) JsonMapperRegistry.getReader(type);
+        JsonObjectCursor cursor = JsonCursors.createJsonValueMap(json);
+        return mapper.map(cursor);
     }
 
     public JsonValue readValue(@NotNull String json) {
@@ -113,8 +121,18 @@ public record JsonAdapter(JsonConfig config, Executor executor) {
      * <p>The UTF-8 encoding of the string is performed on the calling thread
      * before dispatch so that the string's char[] is not retained by the async task.
      */
-    public <T> CompletableFuture<JsonValue> readValueAsync(InputStream inputStream) {
+    public CompletableFuture<JsonValue> readValueAsync(InputStream inputStream) {
         return CompletableFuture.supplyAsync(() -> readValue(inputStream));
+    }
+
+    /**
+     * Asynchronously parses {@code inputStream} into an instance of {@link JsonValue}.
+     *
+     * <p>The UTF-8 encoding of the string is performed on the calling thread
+     * before dispatch so that the string's char[] is not retained by the async task.
+     */
+    public <T> CompletableFuture<T> readValueAsync(@NotNull JsonValue json, Class<T> type)  {
+        return CompletableFuture.supplyAsync(() -> readValue(json, type));
     }
 
     /**
@@ -165,8 +183,16 @@ public record JsonAdapter(JsonConfig config, Executor executor) {
         JsonWriterMapper<T> writerMapper = (JsonWriterMapper<T>) JsonMapperRegistry.getWriter(value.getClass());
         if (writerMapper == null)
             throw new IllegalStateException("No JsonWriterMapper registered for " + value.getClass().getName()
-                + ". Ensure the class is annotated with @SerializedObject and was processed by the annotation processor.");
+                + ". Ensure the class is annotated with  and was processed by the annotation processor.");
         return writerMapper.write(value);
+    }
+
+    public <T> byte[] writeValueAsBytes(@NotNull T value) {
+        JsonWriterMapper<T> writerMapper = (JsonWriterMapper<T>) JsonMapperRegistry.getWriter(value.getClass());
+        if (writerMapper == null)
+            throw new IllegalStateException("No JsonWriterMapper registered for " + value.getClass().getName()
+                + ". Ensure the class is annotated with  and was processed by the annotation processor.");
+        return writerMapper.writeAsBytes(value);
     }
 
     /**
@@ -198,7 +224,7 @@ public record JsonAdapter(JsonConfig config, Executor executor) {
         JsonWriterMapper<T> writer = (JsonWriterMapper<T>) JsonMapperRegistry.getWriter(entity.getClass());
         if (writer == null)
             throw new IllegalStateException("No JsonWriterMapper registered for " + entity.getClass().getName()
-                + ". Ensure the class is annotated with @SerializedObject and was processed by the annotation processor.");
+                + ". Ensure the class is annotated with  and was processed by the annotation processor.");
 
         JsonDomBuilder builder = new JsonDomBuilder();
         writer.writeTo(builder, entity);
@@ -215,7 +241,7 @@ public record JsonAdapter(JsonConfig config, Executor executor) {
      *       {@link java.util.UUID}, {@link java.net.URI}/{@link java.net.URL},
      *       {@link java.nio.file.Path}, all {@code java.time.*} types, and any
      *       custom {@link CoreTypeResolver} registered by the caller.</li>
-     *   <li>Fall through to the mapper registry for {@code @SerializedObject}-annotated
+     *   <li>Fall through to the mapper registry for {@code }-annotated
      *       POJOs — {@code tree} must be a {@link JsonObject} in that case.</li>
      * </ol>
      *
@@ -248,7 +274,7 @@ public record JsonAdapter(JsonConfig config, Executor executor) {
         JsonMapper<T> mapper = (JsonMapper<T>) JsonMapperRegistry.getReader(type);
         if (mapper == null)
             throw new IllegalStateException("No JsonMapper registered for " + type.getName()
-                + ". Ensure the class is annotated with @SerializedObject and was processed "
+                + ". Ensure the class is annotated with  and was processed "
                 + "by the annotation processor, or register a CoreTypeResolver for it.");
 
         return mapper.map(new JsonDomCursor(obj));
@@ -337,6 +363,36 @@ public record JsonAdapter(JsonConfig config, Executor executor) {
      */
     public <T> CompletableFuture<String> writeValueAsync(@NotNull JsonValue value) {
         return CompletableFuture.supplyAsync(() -> writeValue(value), executor);
+    }
+
+    public <T> void writeValue(@NotNull T value, @NotNull OutputStream out) throws IOException {
+        byte[] bytes = writeValueAsBytes(value); // existing mapper produces bytes
+        out.write(bytes);
+    }
+
+    public void writeValue(@NotNull JsonValue value, @NotNull OutputStream out) throws IOException {
+        String json = writeValue(value); // existing JsonDomWriter
+        out.write(json.getBytes(StandardCharsets.UTF_8));
+    }
+
+    public CompletableFuture<Void> writeValueAsync(@NotNull Object value, @NotNull OutputStream out) {
+        return CompletableFuture.runAsync(() -> {
+            try {
+                writeValue(value, out);
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        }, executor);
+    }
+
+    public CompletableFuture<Void> writeValueAsync(@NotNull JsonValue value, @NotNull OutputStream out) {
+        return CompletableFuture.runAsync(() -> {
+            try {
+                writeValue(value, out);
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        }, executor);
     }
 
     public JsonWriter createWriter(JsonWriterOptions... options) {

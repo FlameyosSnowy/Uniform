@@ -99,10 +99,6 @@ public final class MapJsonCursor implements JsonReadCursor {
         this.entered     = false;
     }
 
-    // =========================================================
-    // Object / Array navigation
-    // =========================================================
-
     @Override
     public boolean enterObject() {
         if (entered) return false;
@@ -252,6 +248,11 @@ public final class MapJsonCursor implements JsonReadCursor {
     @Override
     public @NotNull JsonReadCursor elementValueCursor() {
         return subCursorFor(currentElement);
+    }
+
+    @Override
+    public boolean elementIsNull() {
+        return currentElement == null;
     }
 
     // =========================================================

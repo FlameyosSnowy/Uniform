@@ -151,4 +151,10 @@ public interface JsonReadCursor {
      * element's value. Used for nested object / array elements.
      */
     @NotNull JsonReadCursor elementValueCursor();
+
+    default char fieldValueAsChar() {
+        return (char) (elementValueAsByte() & 255);
+    }
+
+    boolean elementIsNull();
 }

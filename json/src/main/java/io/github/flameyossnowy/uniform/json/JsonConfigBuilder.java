@@ -16,6 +16,17 @@ public class JsonConfigBuilder {
     private int indentSize = 4;
     private EnumSet<JsonReadFeature> readFeatures = EnumSet.noneOf(JsonReadFeature.class);
     private EnumSet<JsonWriteFeature> writeFeatures = EnumSet.noneOf(JsonWriteFeature.class);
+    private ReflectionConfig reflectionConfig = ReflectionConfig.DEFAULT;
+
+    public JsonConfigBuilder setReflectionConfig(ReflectionConfig reflectionConfig) {
+        this.reflectionConfig = reflectionConfig != null ? reflectionConfig : ReflectionConfig.DEFAULT;
+        return this;
+    }
+
+    public JsonConfigBuilder disableReflection() {
+        this.reflectionConfig = ReflectionConfig.DISABLED;
+        return this;
+    }
 
     public JsonConfigBuilder setAsyncWrites(boolean asyncWrites) {
         this.asyncWrites = asyncWrites;
@@ -90,6 +101,6 @@ public class JsonConfigBuilder {
     }
 
     public JsonConfig build() {
-        return new JsonConfig(asyncWrites, indentSize, readFeatures, writeFeatures);
+        return new JsonConfig(asyncWrites, indentSize, readFeatures, writeFeatures, reflectionConfig);
     }
 }

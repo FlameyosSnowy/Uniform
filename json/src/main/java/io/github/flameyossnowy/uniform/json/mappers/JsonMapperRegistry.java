@@ -1,6 +1,8 @@
 package io.github.flameyossnowy.uniform.json.mappers;
 
 import io.github.flameyossnowy.uniform.json.JsonConfig;
+import io.github.flameyossnowy.uniform.json.ReflectionConfig;
+import io.github.flameyossnowy.uniform.json.reflect.ReflectionMapperFactory;
 
 import java.util.Map;
 import java.util.ServiceLoader;
@@ -14,21 +16,6 @@ public final class JsonMapperRegistry {
     private static volatile JsonConfig activeConfig   = null;
 
     private JsonMapperRegistry() {}
-
-    /**
-     * Called by JsonAdapter (or any entry point) before any read/write occurs.
-     * If a config was already applied, this is a no-op unless forceRebind is true.
-     * Triggers bootstrap if not yet done, then propagates config to all modules.
-     */
-    public static void applyConfig(JsonConfig config) {
-        if (config == null) return;
-        synchronized (JsonMapperRegistry.class) {
-            activeConfig = config;
-            bootstrapIfNeeded();
-            // Re-propagate to all already-loaded modules so late-registered ones also get it
-            propagateConfigToModules(new JsonMapperRegistry(), config);
-        }
-    }
 
     public static JsonConfig getActiveConfig() {
         return activeConfig;
@@ -107,12 +94,31 @@ public final class JsonMapperRegistry {
         WRITERS.put(type, mapper);
     }
 
+    private static volatile ReflectionConfig reflectionConfig = ReflectionConfig.DEFAULT;
+
+    public static void applyConfig(JsonConfig config) {
+        if (config == null) return;
+        synchronized (JsonMapperRegistry.class) {
+            activeConfig      = config;
+            reflectionConfig  = config.reflectionConfig();
+            bootstrapIfNeeded();
+            propagateConfigToModules(new JsonMapperRegistry(), config);
+        }
+    }
+
     public static JsonMapper<?> getReader(Class<?> type) {
         bootstrapIfNeededUnsafe();
         JsonMapper<?> mapper = READERS.get(type);
         if (mapper != null) return mapper;
         tryLoadMissingGeneratedModules();
-        return READERS.get(type);
+        mapper = READERS.get(type);
+        if (mapper != null) return mapper;
+
+        // Reflection fallback
+        if (reflectionConfig.enabled()) {
+            return ReflectionMapperFactory.buildReader(type);
+        }
+        return null;
     }
 
     public static JsonWriterMapper<?> getWriter(Class<?> type) {
@@ -120,7 +126,13 @@ public final class JsonMapperRegistry {
         JsonWriterMapper<?> mapper = WRITERS.get(type);
         if (mapper != null) return mapper;
         tryLoadMissingGeneratedModules();
-        return WRITERS.get(type);
+        mapper = WRITERS.get(type);
+        if (mapper != null) return mapper;
+
+        if (reflectionConfig.enabled()) {
+            return ReflectionMapperFactory.buildWriter(type);
+        }
+        return null;
     }
 
     /** Fast unsynchronized check for the read/write hot path. */

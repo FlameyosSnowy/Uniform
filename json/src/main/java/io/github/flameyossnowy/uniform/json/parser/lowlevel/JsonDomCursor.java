@@ -191,6 +191,11 @@ public final class JsonDomCursor implements JsonReadCursor {
         return new JsonDomCursor(currentElement());
     }
 
+    @Override
+    public boolean elementIsNull() {
+        return node.isNull();
+    }
+
     public @NotNull JsonValue currentElement() {
         if (!(node instanceof JsonArray arr))
             throw new IllegalStateException("Not in array context");

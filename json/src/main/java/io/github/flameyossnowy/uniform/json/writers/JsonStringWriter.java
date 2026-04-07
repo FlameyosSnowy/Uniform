@@ -48,9 +48,14 @@ public sealed class JsonStringWriter permits JsonDomBuilder {
             buf = Arrays.copyOf(buf, Math.max(buf.length * 2, pos + extra));
     }
 
-    private void write(byte b) {
+    public void write(byte b) {
         ensure(1);
         buf[pos++] = b;
+    }
+
+    public void write(char b) {
+        ensure(1);
+        buf[pos++] = (byte) b;
     }
 
     private void write(byte[] bytes) {
@@ -292,7 +297,7 @@ public sealed class JsonStringWriter permits JsonDomBuilder {
         return Arrays.copyOf(buf, pos);
     }
 
-    private void writeString(String s) {
+    public void writeString(String s) {
         final int len = s.length();
         ensure(len * 6 + 2);
         buf[pos++] = '"';

@@ -187,4 +187,8 @@ public final class JsonObject implements JsonValue, Iterable<Map.Entry<String, J
     public Collection<? extends Map.Entry<String, JsonValue>> entries() {
         return map.entrySet();
     }
+
+    public Map<String, JsonValue> getMutableMap() {
+        return map;
+    }
 }

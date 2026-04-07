@@ -39,7 +39,7 @@ import java.util.function.Function;
 
 /**
  * Registry of {@link CoreTypeResolver} instances — the single source of truth for
- * all {@link JsonValue} ↔ Java type conversions outside of generated POJO mappers.
+ * all {@link JsonValue} ↔ Java type conversions outside generated POJO mappers.
  *
  * <h3>Built-in resolvers</h3>
  * <ul>
@@ -138,7 +138,7 @@ public final class CoreTypeResolverRegistry {
 
     private void registerDefaults() {
         register(String.class,
-            v -> v instanceof JsonString s ? s.value() : v instanceof JsonNull ? null : v.toString(),
+            v -> v instanceof JsonString(String value) ? value : v instanceof JsonNull ? null : v.toString(),
             JsonString::new);
 
         register(int.class, CoreTypeResolverRegistry::coerceInt, JsonInteger::new);
@@ -160,27 +160,25 @@ public final class CoreTypeResolverRegistry {
 
         register(BigInteger.class,
             v -> {
-                if (Objects.requireNonNull(v) instanceof JsonNull) {
-                    return null;
-                } else if (v instanceof JsonNumber n) {
-                    return BigInteger.valueOf(n.longValue());
-                } else if (v instanceof JsonString s) {
-                    return new BigInteger(s.value());
-                }
-                return bad(v, BigInteger.class);
+                Objects.requireNonNull(v);
+                return switch (v) {
+                    case JsonNull _ -> null;
+                    case JsonNumber n -> BigInteger.valueOf(n.longValue());
+                    case JsonString s -> new BigInteger(s.value());
+                    default -> bad(v, BigInteger.class);
+                };
             },
             v -> new JsonString(v.toString()));
 
         register(BigDecimal.class,
             v -> {
-                if (Objects.requireNonNull(v) instanceof JsonNull) {
-                    return null;
-                } else if (v instanceof JsonNumber n) {
-                    return BigDecimal.valueOf(n.doubleValue());
-                } else if (v instanceof JsonString s) {
-                    return new BigDecimal(s.value());
-                }
-                return bad(v, BigDecimal.class);
+                Objects.requireNonNull(v);
+                return switch (v) {
+                    case JsonNull _ -> null;
+                    case JsonNumber n -> BigDecimal.valueOf(n.doubleValue());
+                    case JsonString s -> new BigDecimal(s.value());
+                    default -> bad(v, BigDecimal.class);
+                };
             },
             v -> new JsonString(v.toPlainString()));
 
@@ -213,33 +211,31 @@ public final class CoreTypeResolverRegistry {
 
         register(Instant.class,
             v -> {
-                if (Objects.requireNonNull(v) instanceof JsonNull) {
-                    return null;
-                } else if (v instanceof JsonNumber n) {
-                    return Instant.ofEpochMilli(n.longValue());
-                } else if (v instanceof JsonString s) {
-                    return Instant.parse(s.value());
-                }
-                return bad(v, Instant.class);
+                Objects.requireNonNull(v);
+                return switch (v) {
+                    case JsonNull _ -> null;
+                    case JsonNumber n -> Instant.ofEpochMilli(n.longValue());
+                    case JsonString s -> Instant.parse(s.value());
+                    default -> bad(v, Instant.class);
+                };
             },
             v -> new JsonString(v.toString()));
 
         register(Duration.class,
             v -> {
-                if (Objects.requireNonNull(v) instanceof JsonNull) {
-                    return null;
-                } else if (v instanceof JsonNumber n) {
-                    return Duration.ofMillis(n.longValue());
-                } else if (v instanceof JsonString s) {
-                    return Duration.parse(s.value());
-                }
-                return bad(v, Duration.class);
+                Objects.requireNonNull(v);
+                return switch (v) {
+                    case JsonNull _ -> null;
+                    case JsonNumber n -> Duration.ofMillis(n.longValue());
+                    case JsonString s -> Duration.parse(s.value());
+                    default -> bad(v, Duration.class);
+                };
             },
             v -> new JsonLong(v.toMillis()));
     }
 
     /**
-     * Registers a resolver from a deserialize + serialize function pair.
+     * Registers a resolver from a deserialized + serialize function pair.
      * Avoids having to write the full interface for every built-in.
      */
     private <T> void register(
@@ -264,7 +260,7 @@ public final class CoreTypeResolverRegistry {
     }
 
     private static <T> @NotNull CoreTypeResolver<T> buildEnumResolver(@NotNull Class<T> type) {
-        return new CoreTypeResolver<T>() {
+        return new CoreTypeResolver<>() {
             @Override public @NotNull Class<T> getType() { return type; }
 
             @Override
@@ -285,107 +281,89 @@ public final class CoreTypeResolverRegistry {
     }
 
     public static int coerceInt(@NotNull JsonValue v) {
-        if (v instanceof JsonNumber n) {
-            return n.intValue();
-        } else if (v instanceof JsonString s) {
-            return Integer.parseInt(s.value());
-        } else if (v instanceof JsonBoolean b) {
-            return b.value() ? 1 : 0;
-        }
-        return 0;
+        return switch (v) {
+            case JsonNumber n -> n.intValue();
+            case JsonString s -> Integer.parseInt(s.value());
+            case JsonBoolean b -> b.value() ? 1 : 0;
+            default -> 0;
+        };
     }
 
     public static long coerceLong(@NotNull JsonValue v) {
-        if (v instanceof JsonNumber n) {
-            return n.longValue();
-        } else if (v instanceof JsonString s) {
-            return Long.parseLong(s.value());
-        } else if (v instanceof JsonBoolean b) {
-            return b.value() ? 1L : 0L;
-        }
-        return 0L;
+        return switch (v) {
+            case JsonNumber n -> n.longValue();
+            case JsonString s -> Long.parseLong(s.value());
+            case JsonBoolean b -> b.value() ? 1L : 0L;
+            default -> 0L;
+        };
     }
 
     public static double coerceDouble(@NotNull JsonValue v) {
-        if (v instanceof JsonNumber n) {
-            return n.doubleValue();
-        } else if (v instanceof JsonString s) {
-            return Double.parseDouble(s.value());
-        } else if (v instanceof JsonBoolean b) {
-            return b.value() ? 1.0 : 0.0;
-        }
-        return 0.0;
+        return switch (v) {
+            case JsonNumber n -> n.doubleValue();
+            case JsonString s -> Double.parseDouble(s.value());
+            case JsonBoolean b -> b.value() ? 1.0 : 0.0;
+            default -> 0.0;
+        };
     }
 
     public static float coerceFloat(@NotNull JsonValue v) {
-        if (v instanceof JsonNumber n) {
-            return n.floatValue();
-        } else if (v instanceof JsonString s) {
-            return Float.parseFloat(s.value());
-        } else if (v instanceof JsonBoolean b) {
-            return b.value() ? 1.0f : 0.0f;
-        }
-        return 0.0f;
+        return switch (v) {
+            case JsonNumber n -> n.floatValue();
+            case JsonString s -> Float.parseFloat(s.value());
+            case JsonBoolean b -> b.value() ? 1.0f : 0.0f;
+            default -> 0.0f;
+        };
     }
 
     public static short coerceShort(@NotNull JsonValue v) {
-        if (v instanceof JsonNumber n) {
-            return n.shortValue();
-        } else if (v instanceof JsonString s) {
-            return Short.parseShort(s.value());
-        } else if (v instanceof JsonBoolean b) {
-            return (short) (b.value() ? 1 : 0);
-        }
-        return (short) 0;
+        return switch (v) {
+            case JsonNumber n -> n.shortValue();
+            case JsonString s -> Short.parseShort(s.value());
+            case JsonBoolean b -> (short) (b.value() ? 1 : 0);
+            default -> (short) 0;
+        };
     }
 
     public static byte coerceByte(@NotNull JsonValue v) {
-        if (v instanceof JsonNumber n) {
-            return n.byteValue();
-        } else if (v instanceof JsonString s) {
-            return Byte.parseByte(s.value());
-        } else if (v instanceof JsonBoolean b) {
-            return (byte) (b.value() ? 1 : 0);
-        }
-        return (byte) 0;
+        return switch (v) {
+            case JsonNumber n -> n.byteValue();
+            case JsonString s -> Byte.parseByte(s.value());
+            case JsonBoolean b -> (byte) (b.value() ? 1 : 0);
+            default -> (byte) 0;
+        };
     }
 
     public static boolean coerceBool(@NotNull JsonValue v) {
-        if (v instanceof JsonBoolean b) {
-            return b.value();
-        } else if (v instanceof JsonNumber n) {
-            return n.intValue() != 0;
-        } else if (v instanceof JsonString s) {
-            return Boolean.parseBoolean(s.value());
-        }
-        return false;
+        return switch (v) {
+            case JsonBoolean b -> b.value();
+            case JsonNumber n -> n.intValue() != 0;
+            case JsonString s -> Boolean.parseBoolean(s.value());
+            default -> false;
+        };
     }
 
     public static char coerceChar(JsonValue v) {
-        if (v instanceof JsonString s && s.value().length() == 1)
-            return s.value().charAt(0);
-
-        if (v instanceof JsonNumber n) {
-            int i = n.intValue();
-            if (i >= Character.MIN_VALUE && i <= Character.MAX_VALUE)
-                return (char) i;
-        }
-
-        throw new JsonCoercionException("Cannot coerce to char: " + v);
+        return switch (v) {
+            case JsonString s when s.value().length() == 1 -> s.value().charAt(0);
+            case JsonNumber n when n.intValue() >= Character.MIN_VALUE && n.intValue() <= Character.MAX_VALUE -> (char) n.intValue();
+            case null, default -> throw new JsonCoercionException("Cannot coerce to char: " + v);
+        };
     }
 
     public static String coerceString(@NotNull JsonValue v) {
-        if (v instanceof JsonString s) return s.value();
-        if (v instanceof JsonNumber n) return n.toString();
-        if (v instanceof JsonBoolean b) return Boolean.toString(b.value());
-        if (v instanceof JsonNull) return "null";
-        if (v instanceof JsonArray a) return a.toString();
-        if (v instanceof JsonObject o) return o.toString();
-        return "";
+        return switch (v) {
+            case JsonString s -> s.value();
+            case JsonNumber n -> n.toString();
+            case JsonBoolean b -> Boolean.toString(b.value());
+            case JsonNull _ -> "null";
+            case JsonArray a -> a.toString();
+            case JsonObject o -> o.toString();
+        };
     }
 
     public static @NotNull String requireString(@NotNull JsonValue v, @NotNull Class<?> target) {
-        if (v instanceof JsonString s) return s.value();
+        if (v instanceof JsonString(String value)) return value;
         return bad(v, target);
     }
 

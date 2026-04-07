@@ -9,7 +9,8 @@ public record JsonConfig(
     boolean asyncWrites,
     int indentSize,
     EnumSet<JsonReadFeature> readFeatures,
-    EnumSet<JsonWriteFeature> writeFeatures
+    EnumSet<JsonWriteFeature> writeFeatures,
+    ReflectionConfig reflectionConfig
 ) {
     
     public JsonConfig {

@@ -4,6 +4,7 @@ import io.github.flameyossnowy.turboscanner.ByteUtf8Validator;
 import io.github.flameyossnowy.turboscanner.ScanResult;
 import io.github.flameyossnowy.turboscanner.VectorByteScanner;
 
+import io.github.flameyossnowy.uniform.json.ReflectionConfig;
 import io.github.flameyossnowy.uniform.json.exceptions.Exceptions;
 import io.github.flameyossnowy.uniform.json.exceptions.JsonException;
 import io.github.flameyossnowy.uniform.json.JsonConfig;
@@ -29,7 +30,7 @@ public final class JsonFormatter {
 
     public JsonFormatter(Path filePath, int indentSize) {
         this.filePath = filePath;
-        this.config   = new JsonConfig(false, indentSize, null, null);
+        this.config   = new JsonConfig(false, indentSize, null, null, ReflectionConfig.DEFAULT);
     }
 
     public ByteBuffer format(ByteBuffer buffer) {
