@@ -2,6 +2,7 @@ package io.github.flameyossnowy.uniform.json.bench;
 
 import com.dslplatform.json.DslJson;
 import com.dslplatform.json.runtime.Settings;
+import io.github.flameyossnowy.uniform.json.ReflectionConfig;
 import io.github.flameyossnowy.uniform.json.bench.fixtures.AddressPojo;
 import io.github.flameyossnowy.uniform.json.bench.fixtures.ComplexBenchPojo;
 import io.github.flameyossnowy.uniform.json.bench.fixtures.MediumBenchPojo;
@@ -152,8 +153,6 @@ public class JacksonVsUniformReadWriteBenchmark {
         return jackson.writeValueAsString(users);
     }
 
-    // ── Setup ────────────────────────────────────────────────────────────────
-
     @Setup(Level.Trial)
     public void setup() throws Exception {
         dslOut = new ByteArrayOutputStream(64);
@@ -168,7 +167,7 @@ public class JacksonVsUniformReadWriteBenchmark {
 
         JsonConfig cfg = new JsonConfig(false, 2,
             EnumSet.noneOf(JsonReadFeature.class),
-            EnumSet.noneOf(JsonWriteFeature.class), reflectionConfig);
+            EnumSet.noneOf(JsonWriteFeature.class), ReflectionConfig.DEFAULT);
         uniform = new JsonAdapter(cfg);
 
         simpleJson  = "{\"id\":1,\"name\":\"a\"}";

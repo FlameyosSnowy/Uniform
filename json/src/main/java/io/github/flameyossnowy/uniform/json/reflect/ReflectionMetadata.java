@@ -94,7 +94,7 @@ public final class ReflectionMetadata {
                 rc.getType(),
                 rc.getGenericType(),
                 accessor,
-                null,   // records are immutable — writer = null
+                null,
                 type
             ));
             ctorTypes[i] = rc.getType();

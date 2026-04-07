@@ -210,13 +210,9 @@ public final class JsonDomBuilder extends JsonStringWriter {
         }
     }
 
-    // -------------------------------------------------------------------------
-    // Suppress string output — this builder never produces a string
-    // -------------------------------------------------------------------------
-
     @Override
     public String toString() {
         throw new UnsupportedOperationException(
-            "JsonDomBuilder does not produce a string — call result() instead");
+            "JsonDomBuilder does not produce a string, call result() instead");
     }
 }

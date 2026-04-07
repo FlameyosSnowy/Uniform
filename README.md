@@ -271,7 +271,7 @@ JsonConfig config = new JsonConfig(
 ## How it works
 
 ```
-Your POJO  ──annotationprocessor──▶  MyPojo_JsonReader.java
+Your POJO  annotationprocessor ──▶   MyPojo_JsonReader.java
                                       MyPojo_JsonWriter.java
                                       MyPojo_JsonModule.java
                                            │

@@ -24,10 +24,6 @@ public final class JsonObject implements JsonValue, Iterable<Map.Entry<String, J
 
     private final Map<String, JsonValue> map = new LinkedHashMap<>();
 
-    // -------------------------------------------------------------------------
-    // Mutation
-    // -------------------------------------------------------------------------
-
     /** Associates {@code key} with {@code value}, replacing any previous mapping. */
     public JsonObject put(@NotNull String key, @NotNull JsonValue value) {
         map.put(key, value);

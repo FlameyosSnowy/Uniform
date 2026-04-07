@@ -72,7 +72,6 @@ public final class ReflectionWriteDelegate {
             return;
         }
 
-        // Nested object — prefer compile-time writer, fall back to reflection
         JsonWriterMapper<Object> writer =
             (JsonWriterMapper<Object>) JsonMapperRegistry.getWriter(type);
         if (writer == null) {

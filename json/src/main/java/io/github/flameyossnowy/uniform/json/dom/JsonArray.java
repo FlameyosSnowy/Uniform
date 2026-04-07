@@ -20,10 +20,6 @@ public final class JsonArray implements JsonValue, Iterable<JsonValue> {
 
     private final List<JsonValue> values = new ArrayList<>();
 
-    // -------------------------------------------------------------------------
-    // Mutation
-    // -------------------------------------------------------------------------
-
     public JsonArray add(@NotNull JsonValue value) {
         values.add(value);
         return this;
@@ -48,10 +44,6 @@ public final class JsonArray implements JsonValue, Iterable<JsonValue> {
     public JsonValue remove(int index) {
         return values.remove(index);
     }
-
-    // -------------------------------------------------------------------------
-    // Typed accessors
-    // -------------------------------------------------------------------------
 
     /** Returns the raw {@link JsonValue} at {@code index}. */
     public @NotNull JsonValue getRaw(int index) {
@@ -102,7 +94,7 @@ public final class JsonArray implements JsonValue, Iterable<JsonValue> {
 
     public boolean getBoolean(int index) {
         JsonValue v = values.get(index);
-        if (v instanceof JsonBoolean b) return b.value();
+        if (v instanceof JsonBoolean(boolean value)) return value;
         throw new JsonTypeException(index, "Boolean", v);
     }
 
@@ -118,10 +110,6 @@ public final class JsonArray implements JsonValue, Iterable<JsonValue> {
         throw new JsonTypeException(index, "JsonArray", v);
     }
 
-    // -------------------------------------------------------------------------
-    // Query
-    // -------------------------------------------------------------------------
-
     public int size() {
         return values.size();
     }
@@ -129,10 +117,6 @@ public final class JsonArray implements JsonValue, Iterable<JsonValue> {
     public boolean isEmpty() {
         return values.isEmpty();
     }
-
-    // -------------------------------------------------------------------------
-    // Iterable
-    // -------------------------------------------------------------------------
 
     @Override
     public @NotNull Iterator<JsonValue> iterator() {

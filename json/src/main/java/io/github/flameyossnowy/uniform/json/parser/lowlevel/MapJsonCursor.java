@@ -45,30 +45,21 @@ import java.util.Map;
  */
 public final class MapJsonCursor implements JsonReadCursor {
 
-    // ── Cursor mode ──────────────────────────────────────────────────────────
     private enum Mode { OBJECT, ARRAY, SCALAR }
 
     private final Mode mode;
 
-    // ── OBJECT mode state ────────────────────────────────────────────────────
     /** Ordered entry iterator for the current map level. */
     private Iterator<Map.Entry<String, Object>> entryIterator;
     private String currentKey;
     private Object currentValue;
 
-    // ── ARRAY mode state ─────────────────────────────────────────────────────
     private Iterator<Object> elementIterator;
     private Object currentElement;
 
-    // ── SCALAR mode state (sub-cursor for a single value) ────────────────────
     private final Object scalarValue;
 
-    // ── Shared: has enterObject / enterArray been called yet? ────────────────
     private boolean entered;
-
-    // =========================================================
-    // Constructors
-    // =========================================================
 
     /**
      * Creates a top-level cursor over a JSON object map.

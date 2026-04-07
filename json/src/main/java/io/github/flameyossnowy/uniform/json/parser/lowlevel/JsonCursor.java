@@ -102,9 +102,9 @@ public final class JsonCursor implements JsonReadCursor {
         }
     }
 
-    /** Thread-local decode buffer for escape-sequence slow path. */
-    private static final ThreadLocal<byte[]> DECODE_BUFFER =
-        ThreadLocal.withInitial(() -> new byte[1024]);
+    private final boolean noScan;      // true = small input, skip bitmask entirely
+    private byte[] decodeBuffer;       // reference kept so we can return it to cache
+    private final JsonCursorCache cache;
 
     private final byte[]     input;
     private final ScanResult scan;
@@ -135,11 +135,14 @@ public final class JsonCursor implements JsonReadCursor {
     private final boolean wrapExceptions;
     private final boolean anyComments;
 
-    public JsonCursor(byte[] input, ScanResult scan, JsonConfig config) {
+    public JsonCursor(boolean noScan, JsonCursorCache cache, byte[] input, byte[] decodeBuffer, ScanResult scan, JsonConfig config) {
+        this.noScan = noScan;
+        this.cache = cache;
         this.input = input;
         this.scan  = scan;
         this.pos   = 0;
         this.limit = input.length;
+        this.decodeBuffer = decodeBuffer;
         this.fieldValueLen   = -1;
         this.elementValueLen = -1;
 
@@ -159,11 +162,14 @@ public final class JsonCursor implements JsonReadCursor {
         this.anyComments                = allowJavaComments || allowYamlComments;
     }
 
-    private JsonCursor(byte[] input, ScanResult scan, int pos, int limit, JsonCursor p) {
+    private JsonCursor(boolean noScan, JsonCursorCache cache, byte[] input, byte[] decodeBuffer, ScanResult scan, int pos, int limit, JsonCursor p) {
+        this.noScan = noScan;
+        this.cache = cache;
         this.input = input;
         this.scan  = scan;
         this.pos   = pos;
         this.limit = limit;
+        this.decodeBuffer = decodeBuffer;
         this.fieldValueLen   = -1;
         this.elementValueLen = -1;
 
@@ -837,7 +843,7 @@ public final class JsonCursor implements JsonReadCursor {
     @Override
     public @NotNull JsonCursor fieldValueCursor() {
         ensureValueLen();
-        final JsonCursor sub = new JsonCursor(input, scan, fieldValueStart, fieldValueStart + fieldValueLen, this);
+        final JsonCursor sub = new JsonCursor(noScan, cache, input, decodeBuffer, scan, fieldValueStart, fieldValueStart + fieldValueLen, this);
         pos = fieldValueStart + fieldValueLen;
         finishFieldAfterValue();
         return sub;
@@ -929,10 +935,26 @@ public final class JsonCursor implements JsonReadCursor {
     @Override
     public @NotNull JsonCursor elementValueCursor() {
         ensureElementLen();
-        final JsonCursor sub = new JsonCursor(input, scan, elementValueStart, elementValueStart + elementValueLen, this);
+        final JsonCursor sub = new JsonCursor(noScan, cache, input, decodeBuffer, scan, elementValueStart, elementValueStart + elementValueLen, this);
         pos = elementValueStart + elementValueLen;
         finishElementAfterValue();
         return sub;
+    }
+
+    @Override
+    public boolean elementIsNull() {
+        return elementIsNull(elementValueStart, elementValueLen);
+    }
+
+    private boolean elementIsNull(int start, int len) {
+        // JSON literal "null" is exactly 4 characters: n u l l
+        if (len != 4) return false;
+
+        final byte[] inp = input;
+        return inp[start]     == 'n'
+            && inp[start + 1] == 'u'
+            && inp[start + 2] == 'l'
+            && inp[start + 3] == 'l';
     }
 
     private boolean parseBoolean(int s, int len) {
@@ -1117,11 +1139,12 @@ public final class JsonCursor implements JsonReadCursor {
     private @NotNull String decodeJsonStringSlow(int start, int endExclusive) {
         final byte[]  inp       = input;
         final boolean checkCtrl = !allowUnescapedControlChars;
-        byte[] buf = DECODE_BUFFER.get();
-        final int len = endExclusive - start;
+        final int     len       = endExclusive - start;
+        byte[] buf = cache.acquireDecodeBuffer(len);
         if (buf.length < len) {
             buf = new byte[Math.max(len, buf.length * 2)];
-            DECODE_BUFFER.set(buf);
+            cache.releaseDecodeBuffer(buf);
+            this.decodeBuffer = buf;
         }
         int out = 0, i = start;
         boolean pureAscii = true;
@@ -1135,7 +1158,8 @@ public final class JsonCursor implements JsonReadCursor {
                 final int copyLen = j - i;
                 if (out + copyLen > buf.length) {
                     buf = growBuffer(buf, out, out + copyLen);
-                    DECODE_BUFFER.set(buf);
+                    cache.releaseDecodeBuffer(buf);
+                    this.decodeBuffer = buf;
                 }
                 if (pureAscii) {
                     int k = i;
@@ -1204,7 +1228,8 @@ public final class JsonCursor implements JsonReadCursor {
                     }
                     if (out + 4 > buf.length) {
                         buf = growBuffer(buf, out, out + 4);
-                        DECODE_BUFFER.set(buf);
+                        cache.releaseDecodeBuffer(buf);
+                        this.decodeBuffer = buf;
                     }
                     if (cp >= 0x80) pureAscii = false;
                     out = writeUtf8(cp, buf, out);
@@ -1221,12 +1246,14 @@ public final class JsonCursor implements JsonReadCursor {
     }
 
     private int findStringEnd(int startQuote) {
-        final int    from   = startQuote + 1;
+        if (noScan) return findStringEndManual(startQuote, (byte) '"');
+
         final long[] quotes = scan.getQuoteMask();
         final int    lanes  = quotes.length;
         if (lanes == 0) return findStringEndManual(startQuote, (byte) '"');
-        int  word = from >>> 6;
-        long mask = (word < lanes) ? quotes[word] & (~0L << (from & 63)) : 0L;
+
+        int  word = (startQuote + 1) >>> 6;
+        long mask = (word < lanes) ? quotes[word] & (~0L << ((startQuote + 1) & 63)) : 0L;
         while (word < lanes) {
             while (mask != 0L) {
                 final int q = (word << 6) + Long.numberOfTrailingZeros(mask);
@@ -1274,6 +1301,8 @@ public final class JsonCursor implements JsonReadCursor {
             return findStringEnd(start) + 1;
         if (allowSingleQuotes && ft == TOK_SQUOTE)
             return findStringEndManual(start, (byte) '\'') + 1;
+
+        if (noScan) return skipValueEndScalar(start);
 
         final long[] structural = scan.getStructuralMask();
         final int    lanes      = structural.length;
@@ -1711,7 +1740,7 @@ public final class JsonCursor implements JsonReadCursor {
         final byte vTok = TOKEN[input[savedPos] & 0xFF];
         if (vTok == TOK_OBJ_OPEN || vTok == TOK_ARR_OPEN) {
             final int        vEnd = savedPos + findValueLength(savedPos);
-            final JsonCursor sub  = new JsonCursor(input, scan, savedPos, vEnd, this);
+            final JsonCursor sub  = new JsonCursor(noScan, cache, input, decodeBuffer, scan, savedPos, vEnd, this);
             jsonValue = sub.parseValueInternal();
             pos = vEnd;
         } else {
