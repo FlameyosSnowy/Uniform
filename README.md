@@ -1,6 +1,6 @@
 # Uniform
 
-**High-performance JSON serialization for Java 21, powered by SIMD-accelerated parsing and compile-time code generation.**
+**High-performance JSON serialization for Java 25, powered by SIMD-accelerated parsing and compile-time code generation.**
 
 Uniform is inspired by Jackson and simdjson but takes a different approach: instead of reflection at runtime, it generates specialized reader/writer classes at compile time via an annotation processor. The result is allocation-free hot paths, zero reflection overhead, and throughput that beats Jackson by up to **3.57×** on writes and **1.9×** on reads.
 
