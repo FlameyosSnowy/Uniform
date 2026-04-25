@@ -463,12 +463,55 @@ public class JsonCollectionSmokeTest {
     // ============================================================================
 
     @Test
+    @DisplayName("Direct reflection on immutable collection class should not crash")
+    void immutable_collection_reflection_should_not_crash() {
+        // This test verifies that ReflectionMetadata does not attempt to access
+        // private fields in ImmutableCollections$List12 which JPMS blocks
+        List<String> immutableList = List.of("a", "b");
+
+        // This should not throw InaccessibleObjectException
+        assertDoesNotThrow(() -> {
+            io.github.flameyossnowy.uniform.json.reflect.ReflectionMetadata meta =
+                io.github.flameyossnowy.uniform.json.reflect.ReflectionMetadata.of(immutableList.getClass());
+            // Should have no properties since we skip Collection types
+            assertTrue(meta.properties.isEmpty(),
+                "Immutable collection class should have no reflected properties");
+        }, "Reflection on ImmutableCollections$List12 should not crash with JPMS");
+    }
+
+    @Test
+    @DisplayName("Direct reflection on immutable set class should not crash")
+    void immutable_set_reflection_should_not_crash() {
+        Set<Integer> immutableSet = Set.of(1, 2, 3);
+
+        assertDoesNotThrow(() -> {
+            io.github.flameyossnowy.uniform.json.reflect.ReflectionMetadata meta =
+                io.github.flameyossnowy.uniform.json.reflect.ReflectionMetadata.of(immutableSet.getClass());
+            assertTrue(meta.properties.isEmpty(),
+                "Immutable set class should have no reflected properties");
+        }, "Reflection on ImmutableCollections$SetN should not crash with JPMS");
+    }
+
+    @Test
+    @DisplayName("Direct reflection on immutable map class should not crash")
+    void immutable_map_reflection_should_not_crash() {
+        Map<String, String> immutableMap = Map.of("key", "value");
+
+        assertDoesNotThrow(() -> {
+            io.github.flameyossnowy.uniform.json.reflect.ReflectionMetadata meta =
+                io.github.flameyossnowy.uniform.json.reflect.ReflectionMetadata.of(immutableMap.getClass());
+            assertTrue(meta.properties.isEmpty(),
+                "Immutable map class should have no reflected properties");
+        }, "Reflection on ImmutableCollections$MapN should not crash with JPMS");
+    }
+
+    @Test
     void list_of_serializes_without_jpms_issues() {
         // List.of() returns internal immutable list classes (List12, ListN)
         // These are in java.util but are not public - JPMS may restrict access
         PojoWithImmutableCollections original = new PojoWithImmutableCollections(
             "immutable",
-            List.of("a", "b", "c"),           // List.of() - returns internal List12/ListN
+            List.of("a", "b"),           // List.of() - returns internal List12/ListN
             Set.of(),                            // Empty set
             Map.of()                             // Empty map
         );
@@ -477,7 +520,7 @@ public class JsonCollectionSmokeTest {
         System.out.println("List.of() serialization: " + json);
 
         // Should serialize as normal array without accessing internal fields
-        assertTrue(json.contains("\"immutableList\":[\"a\",\"b\",\"c\"]"), "List.of() should serialize as array");
+        assertTrue(json.contains("\"immutableList\":[\"a\",\"b\"]"), "List.of() should serialize as array");
         assertFalse(json.contains("List12"), "Should not expose internal class name");
         assertFalse(json.contains("ListN"), "Should not expose internal class name");
     }
