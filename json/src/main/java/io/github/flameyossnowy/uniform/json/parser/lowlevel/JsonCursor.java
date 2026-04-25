@@ -1438,7 +1438,7 @@ public final class JsonCursor implements JsonReadCursor {
             final int w  = (inp[i] & 0xFF) | ((inp[i + 1] & 0xFF) << 8);
             final int lo = (w & 0xFF) - '0';
             final int hi = (w >> 8)   - '0';
-            if ((lo | hi) > 9)
+            if (((lo | hi) & 0xFFFFFFF0) != 0)
                 throw new NumberFormatException("Not a digit near byte " + i);
             final long r = lo * 10L + hi;
             return neg ? -r : r;
