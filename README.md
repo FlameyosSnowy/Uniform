@@ -28,13 +28,13 @@ All benchmarks run with JMH in throughput mode (`ops/ms`, higher is better) on J
 
 ![Speedup vs Jackson](benchmarks/bench_speedup.png)
 
-| Category | Uniform | Jackson | simdjson-java¹ | Gson |
-|---|---|---|---|---|
-| Read — Simple | **5,984** | 3,475 | 3,506 | 2,236 |
-| Read — Complex | **2,918** | 1,538 | 1,661 | 1,191 |
-| Write — Simple | **19,268** | 5,390 | — | 3,410 |
-| Write — Complex | **5,111** | 2,971 | — | 1,286 |
-| Pretty-print | **1,027** | 338 | — | 227 |
+| Category        | Uniform    | Jackson | simdjson-java¹ | Gson  |
+|-----------------|------------|---------|----------------|-------|
+| Read — Simple   | **5,984**  | 3,475   | 3,506          | 2,236 |
+| Read — Complex  | **2,918**  | 1,538   | 1,661          | 1,191 |
+| Write — Simple  | **19,268** | 5,390   | —              | 3,410 |
+| Write — Complex | **5,111**  | 2,971   | —              | 1,286 |
+| Pretty-print    | **1,027**  | 338     | —              | 227   |
 
 ¹ [simdjson-java](https://github.com/simdjson/simdjson-java) is the official Java port of simdjson — it is a pure parser with no write path.
 
