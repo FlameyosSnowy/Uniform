@@ -14,4 +14,14 @@ public class PojoWithList {
     public PojoWithList(String label, List<String> tags, List<Integer> scores, List<SimplePojo> children) {
         this.label = label; this.tags = tags; this.scores = scores; this.children = children;
     }
+
+    @Override
+    public String toString() {
+        return "PojoWithList{" +
+            "label='" + label + '\'' +
+            ", tags=" + tags +
+            ", scores=" + scores +
+            ", children=" + children +
+            '}';
+    }
 }

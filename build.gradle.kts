@@ -7,7 +7,7 @@ plugins {
 }
 
 group = "io.github.flameyossnowy"
-version = "1.5.8"
+version = "1.5.10"
 
 repositories {
     mavenCentral()
@@ -93,29 +93,33 @@ subprojects {
         signAllPublications()
     }
 
-signing {
-    useGpgCmd()
-}
-
-tasks.withType<Test>().configureEach {
-    jvmArgs("--add-modules", "jdk.incubator.vector")
-}
-
-afterEvaluate {
-    tasks.named<com.vanniktech.maven.publish.tasks.JavadocJar>("plainJavadocJar") {
-        dependsOn(tasks.named("javadoc"))
-        archiveClassifier.set("javadoc")
-        from(tasks.named<Javadoc>("javadoc"))
+    tasks.withType<GenerateModuleMetadata> {
+        enabled = false
     }
 
-    // Ensure metadata generation depends on Javadoc
-    tasks.named("generateMetadataFileForMavenPublication") {
-        dependsOn(tasks.named("plainJavadocJar"))
+    signing {
+        useGpgCmd()
     }
 
-    // Make publish depend on the Javadoc artifact
-    tasks.named("publish") {
-        dependsOn(tasks.named("plainJavadocJar"))
+    tasks.withType<Test>().configureEach {
+        jvmArgs("--add-modules", "jdk.incubator.vector")
     }
-}
+
+    afterEvaluate {
+        tasks.named<com.vanniktech.maven.publish.tasks.JavadocJar>("plainJavadocJar") {
+            dependsOn(tasks.named("javadoc"))
+            archiveClassifier.set("javadoc")
+            from(tasks.named<Javadoc>("javadoc"))
+        }
+
+        // Ensure metadata generation depends on Javadoc
+        tasks.named("generateMetadataFileForMavenPublication") {
+            dependsOn(tasks.named("plainJavadocJar"))
+        }
+
+        // Make publish depend on the Javadoc artifact
+        tasks.named("publish") {
+            dependsOn(tasks.named("plainJavadocJar"))
+        }
+    }
 }
