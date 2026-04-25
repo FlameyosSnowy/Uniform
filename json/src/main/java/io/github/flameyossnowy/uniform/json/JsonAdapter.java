@@ -27,21 +27,31 @@ import org.jetbrains.annotations.Nullable;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.net.URI;
+import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Queue;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ForkJoinPool;
 
 @SuppressWarnings({ "unchecked", "unused", "MethodMayBeStatic" })
-public record JsonAdapter(JsonConfig config, Executor executor) {
+public class JsonAdapter {
+    private final JsonConfig config;
+    private final Executor executor;
+
     public JsonAdapter(JsonConfig config) {
         this(config, ForkJoinPool.commonPool());
     }
@@ -69,8 +79,15 @@ public record JsonAdapter(JsonConfig config, Executor executor) {
 
     public <T> T readValue(@NotNull JsonValue json, Class<T> type) {
         JsonMapper<T> mapper = (JsonMapper<T>) JsonMapperRegistry.getReader(type);
+        validateMapper(type, mapper);
         JsonObjectCursor cursor = JsonCursors.createJsonValueMap(json);
         return mapper.map(cursor);
+    }
+
+    private static <T> void validateMapper(Class<T> type, JsonMapper<T> mapper) {
+        if (mapper == null) {
+            throw new JsonException("No reader found for type " + type);
+        }
     }
 
     public JsonValue readValue(@NotNull String json) {
@@ -85,12 +102,14 @@ public record JsonAdapter(JsonConfig config, Executor executor) {
 
     public <T> T readValue(byte[] bytes, Class<T> type) {
         JsonMapper<T> mapper = (JsonMapper<T>) JsonMapperRegistry.getReader(type);
+        validateMapper(type, mapper);
         JsonCursor cursor = JsonCursors.createNormal(bytes, config);
         return mapper.map(cursor);
     }
 
     public <T> T readValue(InputStream inputStream, Class<T> type) {
         JsonMapper<T> mapper = (JsonMapper<T>) JsonMapperRegistry.getReader(type);
+        validateMapper(type, mapper);
         try {
             JsonCursor cursor = JsonCursors.createNormal(inputStream.readAllBytes(), config);
             return mapper.map(cursor);
@@ -101,6 +120,7 @@ public record JsonAdapter(JsonConfig config, Executor executor) {
 
     public <T> T readValue(Map<String, Object> map, Class<T> type) {
         JsonMapper<T> mapper = (JsonMapper<T>) JsonMapperRegistry.getReader(type);
+        validateMapper(type, mapper);
         MapJsonCursor cursor = JsonCursors.createMap(map);
         return mapper.map(cursor);
     }
@@ -131,7 +151,7 @@ public record JsonAdapter(JsonConfig config, Executor executor) {
      * <p>The UTF-8 encoding of the string is performed on the calling thread
      * before dispatch so that the string's char[] is not retained by the async task.
      */
-    public <T> CompletableFuture<T> readValueAsync(@NotNull JsonValue json, Class<T> type)  {
+    public <T> CompletableFuture<T> readValueAsync(@NotNull JsonValue json, Class<T> type) {
         return CompletableFuture.supplyAsync(() -> readValue(json, type));
     }
 
@@ -237,9 +257,9 @@ public record JsonAdapter(JsonConfig config, Executor executor) {
      * <p>Resolution order:
      * <ol>
      *   <li>Consult {@link CoreTypeResolverRegistry#INSTANCE} — covers all primitives,
-     *       wrappers, {@link String}, {@link java.math.BigInteger}, {@link java.math.BigDecimal},
-     *       {@link java.util.UUID}, {@link java.net.URI}/{@link java.net.URL},
-     *       {@link java.nio.file.Path}, all {@code java.time.*} types, and any
+     *       wrappers, {@link String}, {@link BigInteger}, {@link BigDecimal},
+     *       {@link UUID}, {@link URI}/{@link URL},
+     *       {@link Path}, all {@code java.time.*} types, and any
      *       custom {@link CoreTypeResolver} registered by the caller.</li>
      *   <li>Fall through to the mapper registry for {@code }-annotated
      *       POJOs — {@code tree} must be a {@link JsonObject} in that case.</li>
@@ -253,7 +273,7 @@ public record JsonAdapter(JsonConfig config, Executor executor) {
      * @param type the target class
      * @param <T>  the target type
      * @return a fully populated instance of {@code T}, or {@code null} if {@code tree}
-     *         is {@link JsonNull}
+     * is {@link JsonNull}
      * @throws IllegalStateException    if no resolver or mapper is registered for {@code type}
      * @throws IllegalArgumentException if the node cannot be converted to {@code type}
      */
@@ -281,7 +301,7 @@ public record JsonAdapter(JsonConfig config, Executor executor) {
     }
 
     /**
-     * Converts a {@link JsonArray} to a {@link java.util.List} whose elements are
+     * Converts a {@link JsonArray} to a {@link List} whose elements are
      * each converted to {@code elementType} via {@link #treeToValue}.
      */
     public <E> @NotNull List<E> treeToList(
@@ -295,7 +315,7 @@ public record JsonAdapter(JsonConfig config, Executor executor) {
     }
 
     /**
-     * Converts a {@link JsonArray} to an insertion-ordered {@link java.util.Set}
+     * Converts a {@link JsonArray} to an insertion-ordered {@link Set}
      * whose elements are each converted to {@code elementType} via {@link #treeToValue}.
      */
     public <E> @NotNull Set<E> treeToSet(
@@ -309,13 +329,13 @@ public record JsonAdapter(JsonConfig config, Executor executor) {
     }
 
     /**
-     * Converts a {@link JsonArray} to a {@link java.util.Queue} whose elements are
+     * Converts a {@link JsonArray} to a {@link Queue} whose elements are
      * each converted to {@code elementType} via {@link #treeToValue}.
      */
     public <E> @NotNull Queue<E> treeToQueue(
         @NotNull JsonArray array,
         @NotNull Class<E> elementType) {
-        java.util.ArrayDeque<E> result = new ArrayDeque<>(array.size());
+        ArrayDeque<E> result = new ArrayDeque<>(array.size());
         for (int i = 0; i < array.size(); i++) {
             result.add(treeToValue(array.getRaw(i), elementType));
         }
@@ -323,7 +343,7 @@ public record JsonAdapter(JsonConfig config, Executor executor) {
     }
 
     /**
-     * Converts a {@link JsonObject} to a {@link java.util.Map} with {@link String}
+     * Converts a {@link JsonObject} to a {@link Map} with {@link String}
      * keys and values converted to {@code valueType} via {@link #treeToValue}.
      */
     public <V> @NotNull Map<String, V> treeToMap(
@@ -344,14 +364,14 @@ public record JsonAdapter(JsonConfig config, Executor executor) {
     @SuppressWarnings("unchecked")
     @Nullable
     private static <T> T defaultForType(@NotNull Class<T> type) {
-        if (type == int.class     || type == Integer.class)  return (T) (Integer) 0;
-        if (type == long.class    || type == Long.class)     return (T) (Long)    0L;
-        if (type == double.class  || type == Double.class)   return (T) (Double)  0.0;
-        if (type == float.class   || type == Float.class)    return (T) (Float)   0.0f;
-        if (type == short.class   || type == Short.class)    return (T) (Short)   (short) 0;
-        if (type == byte.class    || type == Byte.class)     return (T) (Byte)    (byte)  0;
-        if (type == boolean.class || type == Boolean.class)  return (T) Boolean.FALSE;
-        if (type == char.class    || type == Character.class)return (T) (Character) '\0';
+        if (type == int.class || type == Integer.class) return (T) (Integer) 0;
+        if (type == long.class || type == Long.class) return (T) (Long) 0L;
+        if (type == double.class || type == Double.class) return (T) (Double) 0.0;
+        if (type == float.class || type == Float.class) return (T) (Float) 0.0f;
+        if (type == short.class || type == Short.class) return (T) (Short) (short) 0;
+        if (type == byte.class || type == Byte.class) return (T) (Byte) (byte) 0;
+        if (type == boolean.class || type == Boolean.class) return (T) Boolean.FALSE;
+        if (type == char.class || type == Character.class) return (T) (Character) '\0';
         return null;
     }
 
@@ -400,4 +420,37 @@ public record JsonAdapter(JsonConfig config, Executor executor) {
             .addOptions(options)
             .build();
     }
+
+    public JsonConfig config() {
+        return config;
+    }
+
+    public Executor executor() {
+        return executor;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (obj == this) return true;
+        if (obj == null || obj.getClass() != this.getClass()) return false;
+        var that = (JsonAdapter) obj;
+        return Objects.equals(this.config, that.config) &&
+            Objects.equals(this.executor, that.executor);
+    }
+
+    @Override
+    public int hashCode() {
+        int h = 0;
+        h = 31 * h + Objects.hashCode(config);
+        h = 31 * h + Objects.hashCode(executor);
+        return h;
+    }
+
+    @Override
+    public String toString() {
+        return "JsonAdapter[" +
+            "config=" + config + ", " +
+            "executor=" + executor + ']';
+    }
+
 }

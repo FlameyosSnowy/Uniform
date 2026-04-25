@@ -1,4 +1,6 @@
 module Uniform.json.main {
+    uses io.github.flameyossnowy.uniform.json.mappers.JsonMapperModule;
+
     requires jdk.incubator.vector;
     requires org.jetbrains.annotations;
     requires TurboScanner.main;

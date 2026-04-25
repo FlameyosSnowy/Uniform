@@ -7,6 +7,9 @@ import io.github.flameyossnowy.uniform.core.resolvers.ResolverRegistry;
 import io.github.flameyossnowy.uniform.json.mappers.JsonMapper;
 import io.github.flameyossnowy.uniform.json.mappers.JsonMapperRegistry;
 import io.github.flameyossnowy.uniform.json.parser.JsonReadCursor;
+import org.jetbrains.annotations.Contract;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.lang.reflect.*;
 import java.util.*;
@@ -112,14 +115,15 @@ public final class ReflectionReadDelegate {
     private static <C extends Collection<Object>> C readList(JsonReadCursor cursor, Class<?> elementType, Supplier<C> supplier) {
         C collection = supplier.get();
         JsonReadCursor sub = cursor.fieldValueCursor();
-        if (!sub.enterArray()) return nullIfEmpty(cursor, collection);
+        if (!sub.enterArray()) return nullIfEmpty(collection);
         while (sub.nextElement()) {
             collection.add(sub.elementIsNull() ? null : readElement(sub, elementType));
         }
         return collection;
     }
 
-    private static Object readArray(JsonReadCursor cursor, Class<?> elementType) {
+    @Nullable
+    private static Object readArray(@NotNull JsonReadCursor cursor, Class<?> elementType) {
         JsonReadCursor sub = cursor.fieldValueCursor();
         if (!sub.enterArray()) return null;
 
@@ -214,11 +218,13 @@ public final class ReflectionReadDelegate {
         return map;
     }
 
-    private static <C extends Collection<?>> C nullIfEmpty(JsonReadCursor cursor, C col) {
+    @Nullable
+    @Contract(pure = true)
+    private static <C extends Collection<?>> C nullIfEmpty(@NotNull C col) {
         return col.isEmpty() ? null : col;
     }
 
-    private static CollectionKind determineCollectionKind(Class<?> type) {
+    private static CollectionKind determineCollectionKind(@NotNull Class<?> type) {
         if (type.isArray()) return CollectionKind.ARRAY;
         if (List.class.isAssignableFrom(type)) return CollectionKind.LIST;
         if (Set.class.isAssignableFrom(type)) return CollectionKind.SET;

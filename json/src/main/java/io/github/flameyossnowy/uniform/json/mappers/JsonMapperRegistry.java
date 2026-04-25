@@ -4,6 +4,8 @@ import io.github.flameyossnowy.uniform.json.JsonConfig;
 import io.github.flameyossnowy.uniform.json.ReflectionConfig;
 import io.github.flameyossnowy.uniform.json.reflect.ReflectionMapperFactory;
 
+import java.util.BitSet;
+import java.util.Collection;
 import java.util.Map;
 import java.util.ServiceLoader;
 import java.util.concurrent.ConcurrentHashMap;
@@ -121,6 +123,62 @@ public final class JsonMapperRegistry {
         return null;
     }
 
+    // Writer for BitSet (not a Collection, needs special handling)
+    private static final JsonWriterMapper<BitSet> BITSET_WRITER = (out, value) -> {
+        out.beginArray();
+        for (int i = value.nextSetBit(0); i >= 0; i = value.nextSetBit(i + 1)) {
+            out.value(i);
+        }
+        out.endArray();
+    };
+
+    // Dynamic writers for Collection and Map types to avoid JPMS issues with internal implementations
+    private static final JsonWriterMapper<Collection<?>> COLLECTION_WRITER = (out, value) -> {
+        out.beginArray();
+        for (Object elem : value) {
+            if (elem == null) {
+                out.nullValue();
+            } else {
+                // Recursively write element using adapter
+                writeElement(out, elem);
+            }
+        }
+        out.endArray();
+    };
+
+    private static final JsonWriterMapper<Map<?, ?>> MAP_WRITER = (out, value) -> {
+        out.beginObject();
+        for (Map.Entry<?, ?> entry : value.entrySet()) {
+            out.name(String.valueOf(entry.getKey()));
+            Object v = entry.getValue();
+            if (v == null) out.nullValue();
+            else writeElement(out, v);
+        }
+        out.endObject();
+    };
+
+    private static void writeElement(io.github.flameyossnowy.uniform.json.writers.JsonStringWriter out, Object elem) {
+        switch (elem) {
+            case String s -> out.value(s);
+            case Double d -> out.value(d);
+            case Float f -> out.value(f);
+            case Number n -> out.value(n.longValue());
+            case Character n -> out.write(n);
+            case Boolean b -> out.value(b);
+            case Collection<?> col -> COLLECTION_WRITER.writeTo(out, col);
+            case Map<?, ?> map -> MAP_WRITER.writeTo(out, map);
+            default -> {
+                // For other types, look up a writer and use it
+                JsonWriterMapper<Object> writer = (JsonWriterMapper<Object>) getWriter(elem.getClass());
+                if (writer != null) {
+                    writer.writeTo(out, elem);
+                } else {
+                    out.nullValue();
+                }
+            }
+        }
+    }
+
     public static JsonWriterMapper<?> getWriter(Class<?> type) {
         bootstrapIfNeededUnsafe();
         JsonWriterMapper<?> mapper = WRITERS.get(type);
@@ -128,6 +186,20 @@ public final class JsonMapperRegistry {
         tryLoadMissingGeneratedModules();
         mapper = WRITERS.get(type);
         if (mapper != null) return mapper;
+
+        // Check for specific types before Collection/Map to ensure proper handling
+        if (BitSet.class.isAssignableFrom(type)) {
+            return BITSET_WRITER;
+        }
+        // Check for Collection/Map before falling back to reflection
+        // This avoids JPMS issues with internal immutable collection implementations
+        // Note: Queue and Deque are subclasses of Collection, so they're handled here
+        if (Collection.class.isAssignableFrom(type)) {
+            return COLLECTION_WRITER;
+        }
+        if (Map.class.isAssignableFrom(type)) {
+            return MAP_WRITER;
+        }
 
         if (reflectionConfig.enabled()) {
             return ReflectionMapperFactory.buildWriter(type);
