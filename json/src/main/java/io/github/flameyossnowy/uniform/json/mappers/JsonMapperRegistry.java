@@ -2,6 +2,7 @@ package io.github.flameyossnowy.uniform.json.mappers;
 
 import io.github.flameyossnowy.uniform.json.JsonConfig;
 import io.github.flameyossnowy.uniform.json.ReflectionConfig;
+import io.github.flameyossnowy.uniform.json.parser.JsonReadCursor;
 import io.github.flameyossnowy.uniform.json.reflect.ReflectionMapperFactory;
 
 import java.util.BitSet;
@@ -110,16 +111,26 @@ public final class JsonMapperRegistry {
 
     public static JsonMapper<?> getReader(Class<?> type) {
         bootstrapIfNeededUnsafe();
+
         JsonMapper<?> mapper = READERS.get(type);
         if (mapper != null) return mapper;
+
         tryLoadMissingGeneratedModules();
+
         mapper = READERS.get(type);
         if (mapper != null) return mapper;
 
-        // Reflection fallback
+        if (Collection.class.isAssignableFrom(type)) {
+            return COLLECTION_READER;
+        }
+        if (Map.class.isAssignableFrom(type)) {
+            return MAP_READER;
+        }
+
         if (reflectionConfig.enabled()) {
             return ReflectionMapperFactory.buildReader(type);
         }
+
         return null;
     }
 
@@ -156,6 +167,78 @@ public final class JsonMapperRegistry {
         }
         out.endObject();
     };
+
+    private static final JsonMapper<Collection<?>> COLLECTION_READER = (cursor) -> {
+        JsonReadCursor arr = cursor;
+
+        if (!arr.enterArray()) {
+            return null;
+        }
+
+        java.util.List<Object> list = new java.util.ArrayList<>();
+
+        while (arr.nextElement()) {
+            Object value = readAny(arr.elementValueCursor());
+            list.add(value);
+        }
+
+        return list;
+    };
+
+    private static final JsonMapper<Map<?, ?>> MAP_READER = (cursor) -> {
+        JsonReadCursor obj = cursor;
+
+        if (!obj.enterObject()) {
+            return null;
+        }
+
+        Map<String, Object> map = new java.util.HashMap<>();
+
+        while (obj.nextField()) {
+            String key = obj.fieldNameAsString();
+            Object value = readAny(obj.fieldValueCursor());
+            map.put(key, value);
+        }
+
+        return map;
+    };
+
+    private static Object readAny(JsonReadCursor cursor) {
+        // Try object
+        JsonReadCursor objCursor = cursor.fieldValueCursor();
+        if (objCursor.enterObject()) {
+            Map<String, Object> map = new java.util.HashMap<>();
+
+            while (objCursor.nextField()) {
+                String key = objCursor.fieldNameAsString();
+                Object value = readAny(objCursor.fieldValueCursor());
+                map.put(key, value);
+            }
+
+            return map;
+        }
+
+        // Try array
+        JsonReadCursor arrCursor = cursor.fieldValueCursor();
+        if (arrCursor.enterArray()) {
+            java.util.List<Object> list = new java.util.ArrayList<>();
+
+            while (arrCursor.nextElement()) {
+                Object value = readAny(arrCursor.elementValueCursor());
+                list.add(value);
+            }
+
+            return list;
+        }
+
+        // Primitives (fallback)
+        try { return cursor.fieldValueAsInt(); } catch (Exception ignored) {}
+        try { return cursor.fieldValueAsLong(); } catch (Exception ignored) {}
+        try { return cursor.fieldValueAsDouble(); } catch (Exception ignored) {}
+        try { return cursor.fieldValueAsBoolean(); } catch (Exception ignored) {}
+
+        return cursor.fieldValueAsUnquotedString();
+    }
 
     private static void writeElement(io.github.flameyossnowy.uniform.json.writers.JsonStringWriter out, Object elem) {
         switch (elem) {

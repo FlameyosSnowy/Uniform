@@ -70,6 +70,13 @@ public final class ReflectionMetadata {
     }
 
     private static ReflectionMetadata inspect(Class<?> type) {
+        // Skip Collection and Map types to avoid JPMS issues with internal implementations
+        // like ImmutableCollections$List12, ImmutableCollections$SetN, etc.
+        // These should be handled by Collection/Map writers, not reflection
+        if (Collection.class.isAssignableFrom(type) || Map.class.isAssignableFrom(type)) {
+            return new ReflectionMetadata(type, false, Collections.emptyList(), null, null);
+        }
+
         boolean isRecord = type.isRecord();
 
         if (isRecord) {

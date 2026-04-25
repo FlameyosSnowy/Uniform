@@ -7,7 +7,7 @@ plugins {
 }
 
 group = "io.github.flameyossnowy"
-version = "1.5.10"
+version = "1.5.12"
 
 repositories {
     mavenCentral()

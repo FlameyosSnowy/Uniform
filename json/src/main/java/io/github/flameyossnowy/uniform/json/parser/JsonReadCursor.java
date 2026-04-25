@@ -40,10 +40,6 @@ import org.jetbrains.annotations.NotNull;
 @SuppressWarnings("unused")
 public interface JsonReadCursor {
 
-    // =========================================================
-    // Object / Array navigation
-    // =========================================================
-
     /**
      * Advances past the opening {@code '{'} of an object.
      *
@@ -77,10 +73,6 @@ public interface JsonReadCursor {
      *         the closing {@code ']'} (or end of list) is reached.
      */
     boolean nextElement();
-
-    // =========================================================
-    // Field name access
-    // =========================================================
 
     void skipFieldValue();
 

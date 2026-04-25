@@ -149,10 +149,6 @@ public final class MapJsonCursor implements JsonReadCursor {
         return true;
     }
 
-    // =========================================================
-    // Field name access
-    // =========================================================
-
     @Override
     public @NotNull ByteSlice fieldName() {
         String key = currentKey != null ? currentKey : "";
