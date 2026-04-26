@@ -6,6 +6,13 @@ import org.jetbrains.annotations.NotNull;
 import java.nio.charset.StandardCharsets;
 
 public record ByteSlice(byte[] data, int offset, int length) {
+    public byte byteAt(int index) {
+        if (index < 0 || index >= length) {
+            throw new IndexOutOfBoundsException();
+        }
+        return data[offset + index];
+    }
+
     @Contract(value = " -> new", pure = true)
     @Override
     public @NotNull String toString() {

@@ -861,6 +861,11 @@ public final class JsonCursor implements JsonReadCursor {
     public @NotNull JsonCursor fieldValueCursor() {
         ensureValueLen();
         final JsonCursor sub = new JsonCursor(noScan, cache, input, decodeBuffer, scan, fieldValueStart, fieldValueStart + fieldValueLen, this);
+        // Initialize sub-cursor's tracking so both elementValue() and fieldValue() work correctly
+        sub.fieldValueStart = fieldValueStart;
+        sub.fieldValueLen = fieldValueLen;
+        sub.elementValueStart = fieldValueStart;
+        sub.elementValueLen = fieldValueLen;
         pos = fieldValueStart + fieldValueLen;
         finishFieldAfterValue();
         return sub;
@@ -953,6 +958,11 @@ public final class JsonCursor implements JsonReadCursor {
     public @NotNull JsonCursor elementValueCursor() {
         ensureElementLen();
         final JsonCursor sub = new JsonCursor(noScan, cache, input, decodeBuffer, scan, elementValueStart, elementValueStart + elementValueLen, this);
+        // Initialize sub-cursor's tracking so both elementValue() and fieldValue() work correctly
+        sub.elementValueStart = elementValueStart;
+        sub.elementValueLen = elementValueLen;
+        sub.fieldValueStart = elementValueStart;
+        sub.fieldValueLen = elementValueLen;
         pos = elementValueStart + elementValueLen;
         finishElementAfterValue();
         return sub;

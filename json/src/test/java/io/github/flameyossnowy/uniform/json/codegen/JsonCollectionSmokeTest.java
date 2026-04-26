@@ -463,6 +463,59 @@ public class JsonCollectionSmokeTest {
     // ============================================================================
 
     @Test
+    @DisplayName("Read JSON array into generic List using reflection fallback")
+    void read_json_array_into_generic_list() {
+        String json = "[1, 2, 3, \"hello\"]";
+
+        // Reading into a raw type should use the COLLECTION_READER fallback
+        java.util.List<?> result = ADAPTER.readValue(json, java.util.List.class);
+
+        assertNotNull(result);
+        assertEquals(4, result.size());
+        // Numbers parse as Long/Integer by default
+        assertEquals(1L, ((Number) result.get(0)).longValue());
+        assertEquals(2L, ((Number) result.get(1)).longValue());
+        assertEquals(3L, ((Number) result.get(2)).longValue());
+        assertEquals("hello", result.get(3));
+    }
+
+    @Test
+    @DisplayName("Read JSON object into generic Map using reflection fallback")
+    void read_json_object_into_generic_map() {
+        String json = "{\"name\":\"test\",\"value\":42,\"active\":true}";
+
+        java.util.Map<?, ?> result = ADAPTER.readValue(json, java.util.Map.class);
+
+        assertNotNull(result);
+        assertEquals("test", result.get("name"));
+        assertEquals(42L, ((Number) result.get("value")).longValue());
+        assertEquals(Boolean.TRUE, result.get("active"));
+    }
+
+    @Test
+    @DisplayName("Read nested JSON structures into generic collections")
+    void read_nested_json_into_generic_collections() {
+        String json = "{\"users\":[{\"id\":1,\"name\":\"alice\"},{\"id\":2,\"name\":\"bob\"}],\"count\":2}";
+
+        java.util.Map<?, ?> result = ADAPTER.readValue(json, java.util.Map.class);
+
+        assertNotNull(result);
+        assertEquals(2L, ((Number) result.get("count")).longValue());
+
+        java.util.List<?> users = (java.util.List<?>) result.get("users");
+        assertNotNull(users);
+        assertEquals(2, users.size());
+
+        java.util.Map<?, ?> user1 = (java.util.Map<?, ?>) users.get(0);
+        assertEquals(1L, ((Number) user1.get("id")).longValue());
+        assertEquals("alice", user1.get("name"));
+
+        java.util.Map<?, ?> user2 = (java.util.Map<?, ?>) users.get(1);
+        assertEquals(2L, ((Number) user2.get("id")).longValue());
+        assertEquals("bob", user2.get("name"));
+    }
+
+    @Test
     @DisplayName("Direct reflection on immutable collection class should not crash")
     void immutable_collection_reflection_should_not_crash() {
         // This test verifies that ReflectionMetadata does not attempt to access

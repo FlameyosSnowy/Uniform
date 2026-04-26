@@ -3,6 +3,7 @@ package io.github.flameyossnowy.uniform.json.mappers;
 import io.github.flameyossnowy.uniform.json.JsonConfig;
 import io.github.flameyossnowy.uniform.json.ReflectionConfig;
 import io.github.flameyossnowy.uniform.json.parser.JsonReadCursor;
+import io.github.flameyossnowy.uniform.json.parser.lowlevel.ByteSlice;
 import io.github.flameyossnowy.uniform.json.reflect.ReflectionMapperFactory;
 
 import java.util.BitSet;
@@ -204,40 +205,95 @@ public final class JsonMapperRegistry {
     };
 
     private static Object readAny(JsonReadCursor cursor) {
-        // Try object
-        JsonReadCursor objCursor = cursor.fieldValueCursor();
-        if (objCursor.enterObject()) {
-            Map<String, Object> map = new java.util.HashMap<>();
-
-            while (objCursor.nextField()) {
-                String key = objCursor.fieldNameAsString();
-                Object value = readAny(objCursor.fieldValueCursor());
-                map.put(key, value);
-            }
-
-            return map;
+        // Peek at first non-whitespace char to determine type
+        // Both elementValue() and fieldValue() now work on sub-cursors
+        ByteSlice raw = cursor.elementValue();
+        if (raw.length() == 0) {
+            raw = cursor.fieldValue();
         }
 
-        // Try array
-        JsonReadCursor arrCursor = cursor.fieldValueCursor();
-        if (arrCursor.enterArray()) {
-            java.util.List<Object> list = new java.util.ArrayList<>();
-
-            while (arrCursor.nextElement()) {
-                Object value = readAny(arrCursor.elementValueCursor());
-                list.add(value);
-            }
-
-            return list;
+        if (raw.length() == 0) {
+            return null;
         }
 
-        // Primitives (fallback)
-        try { return cursor.fieldValueAsInt(); } catch (Exception ignored) {}
-        try { return cursor.fieldValueAsLong(); } catch (Exception ignored) {}
-        try { return cursor.fieldValueAsDouble(); } catch (Exception ignored) {}
-        try { return cursor.fieldValueAsBoolean(); } catch (Exception ignored) {}
+        byte first = raw.byteAt(0);
 
-        return cursor.fieldValueAsUnquotedString();
+        // Object: starts with {
+        if (first == '{') {
+            if (cursor.enterObject()) {
+                Map<String, Object> map = new java.util.HashMap<>();
+                while (cursor.nextField()) {
+                    String key = cursor.fieldNameAsString();
+                    Object value = readAny(cursor.fieldValueCursor());
+                    map.put(key, value);
+                }
+                return map;
+            }
+            return null;
+        }
+
+        // Array: starts with [
+        if (first == '[') {
+            if (cursor.enterArray()) {
+                java.util.List<Object> list = new java.util.ArrayList<>();
+                while (cursor.nextElement()) {
+                    Object value = readAny(cursor.elementValueCursor());
+                    list.add(value);
+                }
+                return list;
+            }
+            return null;
+        }
+
+        // String: starts with "
+        if (first == '"') {
+            return cursor.elementValueAsUnquotedString();
+        }
+
+        // Null
+        if (raw.length() == 4 &&
+            raw.byteAt(0) == 'n' && raw.byteAt(1) == 'u' &&
+            raw.byteAt(2) == 'l' && raw.byteAt(3) == 'l') {
+            return null;
+        }
+
+        // Boolean: true/false
+        if (raw.length() == 4 &&
+            raw.byteAt(0) == 't' && raw.byteAt(1) == 'r' &&
+            raw.byteAt(2) == 'u' && raw.byteAt(3) == 'e') {
+            return Boolean.TRUE;
+        }
+        if (raw.length() == 5 &&
+            raw.byteAt(0) == 'f' && raw.byteAt(1) == 'a' &&
+            raw.byteAt(2) == 'l' && raw.byteAt(3) == 's' && raw.byteAt(4) == 'e') {
+            return Boolean.FALSE;
+        }
+
+        // Number: parse as long if no decimal point, else double
+        boolean hasDecimal = false;
+        for (int i = 0; i < raw.length(); i++) {
+            byte b = raw.byteAt(i);
+            if (b == '.' || b == 'e' || b == 'E') {
+                hasDecimal = true;
+                break;
+            }
+        }
+
+        String numStr = raw.toString();
+        try {
+            if (hasDecimal) {
+                return Double.parseDouble(numStr);
+            } else {
+                long val = Long.parseLong(numStr);
+                // Return as Integer if it fits
+                if (val >= Integer.MIN_VALUE && val <= Integer.MAX_VALUE) {
+                    return (int) val;
+                }
+                return val;
+            }
+        } catch (NumberFormatException e) {
+            return numStr;
+        }
     }
 
     private static void writeElement(io.github.flameyossnowy.uniform.json.writers.JsonStringWriter out, Object elem) {
