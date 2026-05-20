@@ -1,0 +1,11 @@
+[
+  {"language":"cpp","library":"simdjson","fixture":"simple","mode":"traverse","ops_per_ms":14285.7,"median_ns":70,"throughput_mb":271.429,"iterations":24569620,"bytes":19},
+  {"language":"cpp","library":"simdjson","fixture":"complex","mode":"traverse","ops_per_ms":9090.91,"median_ns":110,"throughput_mb":527.273,"iterations":18383570,"bytes":58},
+  {"language":"cpp","library":"simdjson","fixture":"super_complex","mode":"traverse","ops_per_ms":172.384,"median_ns":5801,"throughput_mb":327.875,"iterations":500910,"bytes":1902},
+  {"language":"cpp","library":"simdjson","fixture":"medium","mode":"traverse","ops_per_ms":779.423,"median_ns":1283,"throughput_mb":641.465,"iterations":2200985,"bytes":823},
+  {"language":"cpp","library":"simdjson","fixture":"simple","mode":"parse_only","ops_per_ms":16666.7,"median_ns":60,"throughput_mb":316.667,"iterations":26739302,"bytes":19},
+  {"language":"cpp","library":"simdjson","fixture":"complex","mode":"parse_only","ops_per_ms":14285.7,"median_ns":70,"throughput_mb":828.571,"iterations":24342418,"bytes":58},
+  {"language":"cpp","library":"simdjson","fixture":"super_complex","mode":"parse_only","ops_per_ms":2169.2,"median_ns":461,"throughput_mb":4125.81,"iterations":5819088,"bytes":1902},
+  {"language":"cpp","library":"simdjson","fixture":"medium","mode":"parse_only","ops_per_ms":4739.34,"median_ns":211,"throughput_mb":3900.47,"iterations":11149919,"bytes":823},
+  {"language":"cpp","library":"simdjson","fixture":"large","mode":"parse_only","ops_per_ms":15.3553,"median_ns":65124,"throughput_mb":4361.94,"iterations":45250,"bytes":284067}
+]
