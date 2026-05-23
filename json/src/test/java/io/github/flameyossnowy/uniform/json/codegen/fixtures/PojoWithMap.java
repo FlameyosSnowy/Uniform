@@ -4,6 +4,7 @@ import io.github.flameyossnowy.uniform.core.annotations.SerializedObject;
 import java.util.Map;
 
 
+@SerializedObject
 public class PojoWithMap {
     public String label;
     public Map<String, Integer> counters;

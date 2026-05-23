@@ -540,12 +540,10 @@ public final class UniformJsonProcessor extends AbstractProcessor {
             addHashConstantsTo(classBuilder, props);
         }
 
-        ClassName concreteCursor = ClassName.get("io.github.flameyossnowy.uniform.json.parser.lowlevel", "JsonCursor");
-
         MethodSpec readFields = MethodSpec.methodBuilder("readFields")
             .addModifiers(Modifier.PUBLIC) // public so cross-package generated readers can call it
             .returns(target)
-            .addParameter(concreteCursor, "cursor")
+            .addParameter(jsonCursor, "cursor")
             .addCode(buildReaderBody(typeElement, target, props))
             .build();
 
@@ -555,7 +553,7 @@ public final class UniformJsonProcessor extends AbstractProcessor {
             .returns(target)
             .addParameter(jsonCursor, "cursor")
             .addStatement("if (!cursor.enterObject()) return null")
-            .addStatement("return readFields(($T) cursor)", concreteCursor)
+            .addStatement("return readFields(cursor)")
             .build();
 
         classBuilder.addMethod(readFields);
