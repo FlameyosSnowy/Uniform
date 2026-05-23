@@ -8,9 +8,6 @@ import io.github.flameyossnowy.turboscanner.ScanResult;
  * and the decode scratch buffer.
  */
 public final class JsonCursorCache {
-
-    // Below this threshold, skip SIMD pre-scan entirely
-    // Tuned empirically: at ~4KB the pre-scan cost breaks even with bitmask-walk savings.
     public static final int SIMD_THRESHOLD = 4096;
 
     private static final ThreadLocal<JsonCursorCache> CACHE =

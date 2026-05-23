@@ -5,7 +5,7 @@ package io.github.flameyossnowy.uniform.json.dom;
  * <p>
  * Typed accessors live on the concrete subtypes ({@link JsonObject}, {@link JsonArray},
  * {@link JsonString}, {@link JsonNumber}, {@link JsonBoolean}).  This interface only
- * exposes behaviour that is meaningful for <em>every</em> JSON value.
+ * exposes behavior that is meaningful for <em>every</em> JSON value.
  */
 public sealed interface JsonValue
         permits JsonString, JsonNumber, JsonBoolean, JsonNull, JsonObject, JsonArray {
@@ -16,7 +16,7 @@ public sealed interface JsonValue
     }
 
     /**
-     * Serialises this value back to a JSON string.
+     * Serializes this value back to a JSON string.
      * Each subtype overrides {@link Object#toString()} to provide this.
      */
     String toString();

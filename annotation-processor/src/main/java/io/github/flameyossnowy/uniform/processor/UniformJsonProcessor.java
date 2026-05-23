@@ -78,11 +78,8 @@ public final class UniformJsonProcessor extends AbstractProcessor {
     private static final String FIELD_FALSE = "__BFALSE";
     private static final String FIELD_NULL  = "__BNULL";
 
-    // Objects with <= SMALL_OBJECT_THRESHOLD fields use linear if/else dispatch,
-    // skipping the FNV-1a hash entirely.
     private static final int SMALL_OBJECT_THRESHOLD = 4;
 
-    // Prefix for reader-side FNV-1a hash constants: static final int __H_fieldName = <hash>;
     private static final String HASH_CONST_PREFIX = "__H_";
 
     private Elements elements;
@@ -583,14 +580,9 @@ public final class UniformJsonProcessor extends AbstractProcessor {
         CodeBlock.Builder cb = CodeBlock.builder();
         ClassName readFeature = ClassName.get("io.github.flameyossnowy.uniform.json.features", "JsonReadFeature");
 
-        // KEY FIX: emit the correct zero literal for primitive types so that
-        // the constructor call never tries to unbox a null Integer/Long/etc.
-        // Previously every field was declared as its boxed form initialised to null,
-        // meaning `new Foo(id, name)` would NPE on unboxing when "id" was absent.
         for (Property p : props) {
             TypeName t = p.typeName();
             if (t.isPrimitive()) {
-                // e.g. "int id = 0;" - stays an int, constructor call never unboxes null
                 cb.addStatement("$T $L = $L", t, p.javaName(), primitiveZero(t));
             } else {
                 cb.addStatement("$T $L = null", t, p.javaName());
@@ -805,9 +797,6 @@ public final class UniformJsonProcessor extends AbstractProcessor {
             TypeName  mapType = ParameterizedTypeName.get(ClassName.get("java.util", "Map"),
                     keyType, valType.box());
 
-            // Use enterObjectValue() in-place instead of spawning a sub-cursor.
-            // This avoids: (1) the JsonCursor allocation, (2) the skipValueEnd pre-scan
-            // that fieldValueCursor() was forced to do to compute the sub-cursor limit.
             cb.addStatement("if (!$L.enterObjectValue()) $L = null", cursorExpr, var);
             cb.beginControlFlow("else");
             cb.addStatement("$T __map = new $T<>()", mapType, linkedHashMap);
@@ -821,7 +810,6 @@ public final class UniformJsonProcessor extends AbstractProcessor {
             return;
         }
 
-        // Inline primitive / string parse - no allocation
         if (t.equals(TypeName.INT)     || t.equals(TypeName.INT.box()))     { cb.addStatement("$L = $L.fieldValueAsInt()",     var, cursorExpr); return; }
         if (t.equals(TypeName.LONG)    || t.equals(TypeName.LONG.box()))    { cb.addStatement("$L = $L.fieldValueAsLong()",    var, cursorExpr); return; }
         if (t.equals(TypeName.DOUBLE)  || t.equals(TypeName.DOUBLE.box()))  { cb.addStatement("$L = $L.fieldValueAsDouble()",  var, cursorExpr); return; }
@@ -862,7 +850,6 @@ public final class UniformJsonProcessor extends AbstractProcessor {
             return;
         }
 
-        // Concrete nested object: enterObjectValue() in-place, no sub-cursor
         if (p.typeMirror().getKind() == TypeKind.DECLARED) {
             ClassName concreteCursor = ClassName.get("io.github.flameyossnowy.uniform.json.parser.lowlevel", "JsonCursor");
             if (t instanceof ClassName declared) {
@@ -954,7 +941,6 @@ public final class UniformJsonProcessor extends AbstractProcessor {
         ClassName concreteCursor = ClassName.get("io.github.flameyossnowy.uniform.json.parser.lowlevel", "JsonCursor");
         if (valType instanceof ClassName declared) {
             ClassName directReader = readerNameFor(declared);
-            // enterObjectValue() is in-place on the map cursor - no sub-cursor needed
             cb.beginControlFlow("if (!$L.enterObjectValue())", cursorExpr);
             cb.addStatement("__map.put(__key, null)");
             cb.nextControlFlow("else");

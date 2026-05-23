@@ -702,10 +702,6 @@ public final class JsonCursor implements JsonReadCursor {
 
     @Override
     public @NotNull String fieldNameAsString() {
-        // Fast path: assume ASCII (the common case for JSON field names).
-        // new String(byte[], off, len) without charset uses ISO-8859-1 which is
-        // identical to ASCII for the 0x00-0x7F range, no charset decoder overhead.
-        // Fall back to UTF-8 only when a high byte is detected.
         final byte[] inp = input;
         final int    off = fieldNameStart;
         final int    len = fieldNameLen;
@@ -744,7 +740,6 @@ public final class JsonCursor implements JsonReadCursor {
         final byte[] inp = input;
         final int    off = fieldNameStart;
 
-        // <=8 chars: SWAR long-pack
         if (len <= 8) {
             long inputWord = 0L, expectWord = 0L;
             for (int i = 0; i < len; i++) {
@@ -757,7 +752,6 @@ public final class JsonCursor implements JsonReadCursor {
             return inputWord == expectWord;
         }
 
-        // >8 chars: SIMD bulk + SWAR tail
         byte[] expBytes = expected.getBytes(StandardCharsets.UTF_8);
         if (expBytes.length != len) return false;
         int i = 0;

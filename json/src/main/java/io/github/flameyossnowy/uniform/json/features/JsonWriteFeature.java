@@ -7,7 +7,6 @@ import java.util.EnumSet;
  */
 public enum JsonWriteFeature {
     WRITE_DATES_AS_TIMESTAMPS(true),
-    PRETTY_PRINTING(false),
     ESCAPE_UNICODE(false),
     WRITE_ENUMS_USING_TO_STRING(false),
     WRITE_SINGLE_ELEM_ARRAYS_UNWRAPPED(false),

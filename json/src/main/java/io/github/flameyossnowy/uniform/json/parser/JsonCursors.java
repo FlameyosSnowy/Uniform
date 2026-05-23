@@ -19,10 +19,6 @@ public final class JsonCursors {
 
     private JsonCursors() {}
 
-    /**
-     * For large inputs (>= SIMD_THRESHOLD): pre-scan with SIMD bitmasks,
-     * then walk bitmasks during parsing. Amortized win for many fields.
-     */
     @Contract("_, _ -> new")
     public static @NotNull JsonCursor createNormal(byte @NotNull [] bytes, JsonConfig config) {
         JsonCursorCache cache = JsonCursorCache.get();

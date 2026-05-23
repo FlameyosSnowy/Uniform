@@ -38,8 +38,6 @@ final class JsonStreamEngine {
 
     private boolean fatalError = false;
 
-    // Error builder callback - kept as a field so JsonFormatter can supply its
-    // position-aware factory without us coupling to it directly.
     private final BiConsumer<String, Integer> onError;
 
     JsonStreamEngine(byte[] input, ScanResult scan, int initialCapacity,
@@ -52,12 +50,10 @@ final class JsonStreamEngine {
         this.onError          = onError;
         this.indentSize       = indentSize;
 
-        // Pre-build indent table
         int tableLen = MAX_DEPTH * indentSize;
         this.indentTable = new byte[tableLen];
         Arrays.fill(this.indentTable, (byte) ' ');
 
-        // Output buffer - use power-of-two ceiling for cheaper grow math
         this.out = new byte[Math.max(Integer.highestOneBit(initialCapacity - 1) << 1, 64)];
     }
 
@@ -74,8 +70,6 @@ final class JsonStreamEngine {
                 continue;
             }
 
-            // 2. Structural chars always handled regardless of string mask
-            // (avoids a branch for the common case; switch is O(1) via table)
             switch (b) {
                 case '{' -> {
                     open((byte) '{');
@@ -109,7 +103,6 @@ final class JsonStreamEngine {
                 }
             }
 
-            // 3. Inside-string guard for non-structural, non-quote bytes
             {
                 final int  lane = i >>> 6;
                 final long bit  = 1L << (i & 63);
@@ -119,7 +112,6 @@ final class JsonStreamEngine {
                 }
             }
 
-            // 4. Scalar value or whitespace
             if (NOT_WS[b & 0xFF]) {
                 writeScalar();
             } else {
@@ -143,10 +135,6 @@ final class JsonStreamEngine {
         i    = end + 1;
     }
 
-    /**
-     * Finds the closing quote using the SIMD quote-position bitmask.
-     * Falls back to a manual scan only when the mask doesn't cover the range.
-     */
     private int findStringEnd(final int from) {
         final long[] qm = quoteMask;
         if (qm != null && qm.length > 0) {
@@ -188,7 +176,6 @@ final class JsonStreamEngine {
         while (i < len) {
             final byte b = inp[i];
 
-            // Stop at whitespace or structural byte
             if (!NOT_WS[b & 0xFF]) break;
             {
                 final int lane = i >>> 6;

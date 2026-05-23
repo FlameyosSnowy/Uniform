@@ -39,14 +39,12 @@ public final class JsonValidator {
     public void validate(@NotNull ByteBuffer buffer) {
         byte[] input = toArray(buffer);
 
-        // Validate UTF-8 correctness
         utf8Validator.reset();
         utf8Validator.validate(input, 0, input.length);
         if (utf8Validator.hasError()) {
             getExceptions().add(error("Invalid UTF-8"));
         }
 
-        // Scan structural elements (for efficiency)
         ScanResult scan = ScanResult.create(input.length);
         scanner.scan(input, 0, input.length, scan);
 
@@ -54,7 +52,6 @@ public final class JsonValidator {
             getExceptions().add(error("UTF-8 structural error"));
         }
 
-        // Validate JSON structure linearly
         validateStructure(input, scan);
 
         if (!exceptions.isEmpty()) {
@@ -63,7 +60,6 @@ public final class JsonValidator {
     }
 
     private void validateStructure(byte[] input, ScanResult scan) {
-        long[] structural = scan.getStructuralMask();
         long[] inside = scan.getInsideStringMask();
 
         int depth = 0;
@@ -108,7 +104,7 @@ public final class JsonValidator {
         }
     }
 
-    private byte[] toArray(ByteBuffer buffer) {
+    private static byte[] toArray(ByteBuffer buffer) {
         if (buffer.hasArray()) return buffer.array();
         byte[] arr = new byte[buffer.remaining()];
         buffer.get(arr);
@@ -122,7 +118,7 @@ public final class JsonValidator {
         );
     }
 
-    private boolean isMasked(int index, long[] mask) {
+    private static boolean isMasked(int index, long[] mask) {
         return ((mask[index >>> 6] >>> (index & 63)) & 1L) != 0;
     }
 }

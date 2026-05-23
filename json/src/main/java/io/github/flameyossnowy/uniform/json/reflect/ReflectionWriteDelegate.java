@@ -36,6 +36,7 @@ public final class ReflectionWriteDelegate {
         out.endObject();
     }
 
+    @SuppressWarnings("unchecked")
     private static void writeValue(JsonStringWriter out, Object value, Class<?> declaredType) {
         if (value == null) {
             out.nullValue();

@@ -100,7 +100,6 @@ public final class MapJsonCursor implements JsonReadCursor {
     public boolean enterObject() {
         if (entered) return false;
 
-        // When used as a sub-cursor the value is already set; validate it's a Map.
         if (mode == Mode.SCALAR) {
             if (!(scalarValue instanceof Map<?, ?> rawMap)) return false;
             @SuppressWarnings("unchecked")
@@ -185,8 +184,6 @@ public final class MapJsonCursor implements JsonReadCursor {
 
     @Override
     public int fieldNameHash() {
-        // FNV-1a over the UTF-8 bytes of the key - identical algorithm to JsonCursor
-        // so generated switch-on-hash dispatch works without modification.
         String key = currentKey != null ? currentKey : "";
         int h = 0x811c9dc5;
         for (int i = 0; i < key.length(); i++) {
@@ -211,10 +208,6 @@ public final class MapJsonCursor implements JsonReadCursor {
         return expected.equals(currentKey);
     }
 
-    // =========================================================
-    // Field value access - scalar
-    // =========================================================
-
     @Override
     public @NotNull ByteSlice fieldValue() {
         return toByteSlice(currentValue);
@@ -237,10 +230,6 @@ public final class MapJsonCursor implements JsonReadCursor {
     public @NotNull JsonReadCursor fieldValueCursor() {
         return subCursorFor(currentValue);
     }
-
-    // =========================================================
-    // Element value access - scalar
-    // =========================================================
 
     @Override
     public @NotNull ByteSlice elementValue() {
@@ -270,10 +259,6 @@ public final class MapJsonCursor implements JsonReadCursor {
         return currentElement == null;
     }
 
-    // =========================================================
-    // Sub-cursor factory
-    // =========================================================
-
     /**
      * Creates the appropriate sub-cursor for {@code value}:
      * <ul>
@@ -295,10 +280,6 @@ public final class MapJsonCursor implements JsonReadCursor {
         }
         return new MapJsonCursor(value);
     }
-
-    // =========================================================
-    // Value coercion helpers
-    // =========================================================
 
     private static int toInt(Object v) {
         if (v instanceof Number number) {
@@ -364,35 +345,22 @@ public final class MapJsonCursor implements JsonReadCursor {
     }
 
     private static @NotNull JsonValue toJsonValue(Object v) {
-        if (v == null) {
-            return JsonNull.INSTANCE;
-        } else if (v instanceof JsonValue jv) {
-            return jv;
-        } else if (v instanceof Boolean b) {
-            return JsonBoolean.of(b);
-        } else if (v instanceof Byte b) {
-            return new JsonByte(b);
-        } else if (v instanceof Short s) {
-            return new JsonShort(s);
-        } else if (v instanceof Integer i) {
-            return new JsonInteger(i);
-        } else if (v instanceof Long l) {
-            return new JsonLong(l);
-        } else if (v instanceof Float f) {
-            return new JsonFloat(f);
-        } else if (v instanceof Double d) {
-            return new JsonDouble(d);
-        } else if (v instanceof Number n) {
-            return new JsonDouble(n.doubleValue());
-            // BigDecimal etc.
-        } else if (v instanceof String s) {
-            return new JsonString(s);
-        } else if (v instanceof Map<?, ?> rawMap) {
-            return mapToJsonObject(rawMap);
-        } else if (v instanceof List<?> rawList) {
-            return listToJsonArray(rawList);
-        }
-        return new JsonString(v.toString());
+        return switch (v) {
+            case null -> JsonNull.INSTANCE;
+            case JsonValue jv -> jv;
+            case Boolean b -> JsonBoolean.of(b);
+            case Byte b -> new JsonByte(b);
+            case Short s -> new JsonShort(s);
+            case Integer i -> new JsonInteger(i);
+            case Long l -> new JsonLong(l);
+            case Float f -> new JsonFloat(f);
+            case Double d -> new JsonDouble(d);
+            case Number n -> new JsonDouble(n.doubleValue());
+            case String s -> new JsonString(s);
+            case Map<?, ?> rawMap -> mapToJsonObject(rawMap);
+            case List<?> rawList -> listToJsonArray(rawList);
+            default -> new JsonString(v.toString());
+        };
     }
 
     @SuppressWarnings("unchecked")

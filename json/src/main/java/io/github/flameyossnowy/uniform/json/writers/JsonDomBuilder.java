@@ -17,7 +17,7 @@ import java.util.Deque;
 
 /**
  * A {@link JsonStringWriter} subclass that builds a {@link JsonValue} DOM tree
- * instead of serialising to a string.
+ * instead of serializing to a string.
  *
  * <p>It is passed directly to an existing {@link JsonWriterMapper},
  * which drives it with the same {@code beginObject}/{@code name}/{@code value}/…
@@ -66,10 +66,6 @@ public final class JsonDomBuilder extends JsonStringWriter {
         return obj;
     }
 
-    // -------------------------------------------------------------------------
-    // Container lifecycle
-    // -------------------------------------------------------------------------
-
     @Override
     public JsonStringWriter beginObject() {
         stack.push(new ObjectFrame());
@@ -100,10 +96,6 @@ public final class JsonDomBuilder extends JsonStringWriter {
         return this;
     }
 
-    // -------------------------------------------------------------------------
-    // Key
-    // -------------------------------------------------------------------------
-
     @Override
     public JsonStringWriter name(String key) {
         pendingKey(key);
@@ -121,10 +113,6 @@ public final class JsonDomBuilder extends JsonStringWriter {
             throw new IllegalStateException("name() called outside of an object context");
         of.pendingKey = key;
     }
-
-    // -------------------------------------------------------------------------
-    // Scalar values
-    // -------------------------------------------------------------------------
 
     @Override
     public JsonStringWriter value(String v) {
@@ -155,11 +143,6 @@ public final class JsonDomBuilder extends JsonStringWriter {
         append(JsonNull.INSTANCE);
         return this;
     }
-
-    // -------------------------------------------------------------------------
-    // Array-specific overloads (arrayValue / arrayNullValue)
-    // These mirror JsonStringWriter's array-context variants.
-    // -------------------------------------------------------------------------
 
     @Override
     public JsonStringWriter arrayValue(long v) {
@@ -194,20 +177,18 @@ public final class JsonDomBuilder extends JsonStringWriter {
     private void append(JsonValue value) {
         Frame top = stack.peek();
 
-        if (top == null) {
-            // Root value
-            root = value;
-            return;
+        switch (top) {
+            case null -> root = value;
+            case ObjectFrame of -> {
+                if (of.pendingKey == null)
+                    throw new IllegalStateException("value() called in object context without a preceding name()");
+                of.obj.put(of.pendingKey, value);
+                of.pendingKey = null;
+            }
+            case ArrayFrame af -> af.arr.add(value);
+            default -> {}
         }
 
-        if (top instanceof ObjectFrame of) {
-            if (of.pendingKey == null)
-                throw new IllegalStateException("value() called in object context without a preceding name()");
-            of.obj.put(of.pendingKey, value);
-            of.pendingKey = null;
-        } else if (top instanceof ArrayFrame af) {
-            af.arr.add(value);
-        }
     }
 
     @Override

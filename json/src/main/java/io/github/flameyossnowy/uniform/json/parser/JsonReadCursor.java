@@ -49,12 +49,6 @@ public interface JsonReadCursor {
     /**
      * Descends in-place into the current field's value, treating it as a JSON object.
      *
-     * <p>Unlike {@link #fieldValueCursor()}, which allocates a new sub-cursor, this
-     * method mutates the cursor itself so that subsequent {@link #nextField()} calls
-     * iterate the nested object's fields. This is the in-place equivalent of
-     * {@link #enterObject()} but scoped to the current field value rather than the
-     * root node.
-     *
      * <p>Returns {@code false} - and leaves the cursor state unchanged - if:
      * <ul>
      *   <li>there is no current field (i.e. {@link #nextField()} has not been called), or</li>
@@ -70,9 +64,8 @@ public interface JsonReadCursor {
      *
      * <p><b>DOM / map cursors</b> ({@link JsonDomCursor}, {@link JsonObjectCursor},
      * {@link MapJsonCursor}): resets the internal iterator or index to the entries of
-     * the nested object. {@link #finishFieldAfterValue()} is a no-op for these cursors
-     * because there is no byte stream to advance.
-     *
+     * the nested object.
+     * <p>
      * @return {@code true} if the cursor successfully descended into a nested object;
      *         {@code false} otherwise
      */
