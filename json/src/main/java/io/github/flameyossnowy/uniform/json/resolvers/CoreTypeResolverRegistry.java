@@ -39,7 +39,7 @@ import java.util.function.Function;
 
 /**
  * Registry of {@link CoreTypeResolver} instances - the single source of truth for
- * all {@link JsonValue} ↔ Java type conversions outside generated POJO mappers.
+ * all {@link JsonValue} Java type conversions outside generated POJO mappers.
  *
  * <h3>Built-in resolvers</h3>
  * <ul>
