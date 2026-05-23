@@ -11,8 +11,8 @@ import org.jetbrains.annotations.Nullable;
  * <p>Implementations are registered with {@link CoreTypeResolverRegistry} and
  * consulted by:
  * <ul>
- *   <li>{@code JsonAdapter.treeToValue(JsonValue, Class)}  — calls {@link #deserialize}</li>
- *   <li>{@code JsonAdapter.valueToTree(T)}                 — calls {@link #serialize}</li>
+ *   <li>{@code JsonAdapter.treeToValue(JsonValue, Class)}  - calls {@link #deserialize}</li>
+ *   <li>{@code JsonAdapter.valueToTree(T)}                 - calls {@link #serialize}</li>
  * </ul>
  *
  * <h3>Implementing a resolver</h3>
@@ -46,7 +46,7 @@ public interface CoreTypeResolver<T> {
     /**
      * Converts a {@link JsonValue} DOM node to an instance of {@code T}.
      *
-     * @param value the DOM node — never {@code null} (but may be {@link JsonNull})
+     * @param value the DOM node - never {@code null} (but may be {@link JsonNull})
      * @return the converted value, or {@code null} if {@code value} is JSON null
      * @throws IllegalArgumentException if the node type is incompatible with {@code T}
      */
@@ -55,7 +55,7 @@ public interface CoreTypeResolver<T> {
     /**
      * Converts an instance of {@code T} to a {@link JsonValue} DOM node.
      *
-     * @param value the value to convert — never {@code null}
+     * @param value the value to convert - never {@code null}
      * @return the DOM representation
      */
     @NotNull JsonValue serialize(@NotNull T value);

@@ -207,6 +207,7 @@ public final class JsonCursor implements JsonReadCursor {
         return true;
     }
 
+    @Override
     public boolean enterObjectValue() {
         return enterValue(TOK_OBJ_OPEN);
     }
@@ -270,6 +271,7 @@ public final class JsonCursor implements JsonReadCursor {
      * Called after an enterObjectValue/enterArrayValue nested parse completes.
      * Consumes trailing comma so the outer nextField() loop sees the next field.
      */
+    @Override
     public void finishFieldAfterValue() {
         skipWs();
         if (pos < limit && TOKEN[input[pos] & 0xFF] == TOK_COMMA) pos++;
@@ -488,7 +490,6 @@ public final class JsonCursor implements JsonReadCursor {
 
         final byte tok = TOKEN[input[p] & 0xFF];
 
-        // Fast-path dispatch (avoid extra branching inside skipValueFull)
         if (tok == TOK_QUOTE) {
             pos = findStringEnd(p) + 1;
         } else if (allowSingleQuotes && tok == TOK_SQUOTE) {
@@ -578,8 +579,8 @@ public final class JsonCursor implements JsonReadCursor {
             }
             if (fracLen > 0) {
                 result += (fracLen <= POW10_OFFSET)
-                    ? fracPart * POW10[POW10_OFFSET - fracLen]
-                    : (double) fracPart / Math.pow(10, fracLen);
+                        ? fracPart * POW10[POW10_OFFSET - fracLen]
+                        : (double) fracPart / Math.pow(10, fracLen);
             }
         }
 
@@ -617,9 +618,9 @@ public final class JsonCursor implements JsonReadCursor {
         if (p + 3 < limit) {
             // Pack 4 bytes LE
             final int w = (inp[p]     & 0xFF)
-                | ((inp[p + 1] & 0xFF) << 8)
-                | ((inp[p + 2] & 0xFF) << 16)
-                | ((inp[p + 3] & 0xFF) << 24);
+                    | ((inp[p + 1] & 0xFF) << 8)
+                    | ((inp[p + 2] & 0xFF) << 16)
+                    | ((inp[p + 3] & 0xFF) << 24);
             if (w == 0x65757274) {
                 pos = p + 4;
                 return true;   // "true"
@@ -659,9 +660,9 @@ public final class JsonCursor implements JsonReadCursor {
     /** Returns true if the token is a value terminator at depth 0. */
     private static boolean isValueTerminator(byte tok) {
         return tok == TOK_COMMA
-            || tok == TOK_OBJ_CLOSE
-            || tok == TOK_ARR_CLOSE
-            || tok == TOK_WS;
+                || tok == TOK_OBJ_CLOSE
+                || tok == TOK_ARR_CLOSE
+                || tok == TOK_WS;
     }
 
     /** Skip a scalar value (non-string, non-nested) from current pos. */
@@ -673,9 +674,6 @@ public final class JsonCursor implements JsonReadCursor {
 
     /**
      * Skip any value (scalar, string, or nested) from current pos.
-     * Strings: SIMD scan to closing quote.
-     * Nested:  structural bitmask walk, O(n/64).
-     * Scalars: byte scan to delimiter.
      */
     private void skipValueFull() {
         if (pos >= limit) return;
@@ -704,10 +702,14 @@ public final class JsonCursor implements JsonReadCursor {
 
     @Override
     public @NotNull String fieldNameAsString() {
+        // Fast path: assume ASCII (the common case for JSON field names).
+        // new String(byte[], off, len) without charset uses ISO-8859-1 which is
+        // identical to ASCII for the 0x00-0x7F range, no charset decoder overhead.
+        // Fall back to UTF-8 only when a high byte is detected.
         final byte[] inp = input;
         final int    off = fieldNameStart;
         final int    len = fieldNameLen;
-        // SWAR scan for any byte >= 0x80
+
         int i = 0;
         final int limit8 = len - 7;
         while (i < limit8) {
@@ -720,7 +722,7 @@ public final class JsonCursor implements JsonReadCursor {
                 return new String(inp, off, len, StandardCharsets.UTF_8);
             i++;
         }
-        return new String(inp, off, len); // latin-1: no charset decode
+        return new String(inp, off, len);
     }
 
     @Override
@@ -762,8 +764,8 @@ public final class JsonCursor implements JsonReadCursor {
         final int bulkLimit = len - V_LEN;
         while (i <= bulkLimit) {
             if (!ByteVector.fromArray(SPECIES, inp, off + i)
-                .eq(ByteVector.fromArray(SPECIES, expBytes, i))
-                .allTrue()) return false;
+                    .eq(ByteVector.fromArray(SPECIES, expBytes, i))
+                    .allTrue()) return false;
             i += V_LEN;
         }
         final int tail8 = len - 8;
@@ -861,7 +863,6 @@ public final class JsonCursor implements JsonReadCursor {
     public @NotNull JsonCursor fieldValueCursor() {
         ensureValueLen();
         final JsonCursor sub = new JsonCursor(noScan, cache, input, decodeBuffer, scan, fieldValueStart, fieldValueStart + fieldValueLen, this);
-        // Initialize sub-cursor's tracking so both elementValue() and fieldValue() work correctly
         sub.fieldValueStart = fieldValueStart;
         sub.fieldValueLen = fieldValueLen;
         sub.elementValueStart = fieldValueStart;
@@ -958,7 +959,6 @@ public final class JsonCursor implements JsonReadCursor {
     public @NotNull JsonCursor elementValueCursor() {
         ensureElementLen();
         final JsonCursor sub = new JsonCursor(noScan, cache, input, decodeBuffer, scan, elementValueStart, elementValueStart + elementValueLen, this);
-        // Initialize sub-cursor's tracking so both elementValue() and fieldValue() work correctly
         sub.elementValueStart = elementValueStart;
         sub.elementValueLen = elementValueLen;
         sub.fieldValueStart = elementValueStart;
@@ -974,38 +974,36 @@ public final class JsonCursor implements JsonReadCursor {
     }
 
     private boolean elementIsNull(int start, int len) {
-        // JSON literal "null" is exactly 4 characters: n u l l
         if (len != 4) return false;
-
         final byte[] inp = input;
         return inp[start]     == 'n'
-            && inp[start + 1] == 'u'
-            && inp[start + 2] == 'l'
-            && inp[start + 3] == 'l';
+                && inp[start + 1] == 'u'
+                && inp[start + 2] == 'l'
+                && inp[start + 3] == 'l';
     }
 
     private boolean parseBoolean(int s, int len) {
         final byte[] inp = input;
         if (len == 4) {
             final int word = (inp[s]     & 0xFF)
-                | ((inp[s + 1] & 0xFF) << 8)
-                | ((inp[s + 2] & 0xFF) << 16)
-                | ((inp[s + 3] & 0xFF) << 24);
+                    | ((inp[s + 1] & 0xFF) << 8)
+                    | ((inp[s + 2] & 0xFF) << 16)
+                    | ((inp[s + 3] & 0xFF) << 24);
             if (word == 0x65757274) return true;
             final byte b0 = inp[s], b1 = inp[s + 1], b2 = inp[s + 2], b3 = inp[s + 3];
             if ((b0 == 't' || b0 == 'T') && (b1 == 'r' || b1 == 'R')
-                && (b2 == 'u' || b2 == 'U') && (b3 == 'e' || b3 == 'E')) return true;
+                    && (b2 == 'u' || b2 == 'U') && (b3 == 'e' || b3 == 'E')) return true;
         }
         if (len == 5) {
             final int word = (inp[s]     & 0xFF)
-                | ((inp[s + 1] & 0xFF) << 8)
-                | ((inp[s + 2] & 0xFF) << 16)
-                | ((inp[s + 3] & 0xFF) << 24);
+                    | ((inp[s + 1] & 0xFF) << 8)
+                    | ((inp[s + 2] & 0xFF) << 16)
+                    | ((inp[s + 3] & 0xFF) << 24);
             if (word == 0x736C6166 && inp[s + 4] == 'e') return false;
             final byte b0 = inp[s], b1 = inp[s + 1], b2 = inp[s + 2], b3 = inp[s + 3], b4 = inp[s + 4];
             if ((b0 == 'f' || b0 == 'F') && (b1 == 'a' || b1 == 'A')
-                && (b2 == 'l' || b2 == 'L') && (b3 == 's' || b3 == 'S')
-                && (b4 == 'e' || b4 == 'E')) return false;
+                    && (b2 == 'l' || b2 == 'L') && (b3 == 's' || b3 == 'S')
+                    && (b4 == 'e' || b4 == 'E')) return false;
         }
         return "true".equalsIgnoreCase(new String(inp, s, len, StandardCharsets.UTF_8));
     }
@@ -1025,7 +1023,18 @@ public final class JsonCursor implements JsonReadCursor {
         final byte[] inp = input;
         final int    lim = limit;
         int p = pos;
-        // All WS chars < 0x21; single lt() replaces 4 eq() + 3 or()
+
+        while (p < lim) {
+            final int b = inp[p] & 0xFF;
+            if ((WS[b >>> 6] & (1L << (b & 63))) == 0) {
+                pos = p;
+                if (anyComments) checkComment(inp, p, lim);
+                return;
+            }
+            p++;
+            if (p - pos >= 4) break;
+        }
+
         final int bulkLimit = lim - V_LEN;
         while (p <= bulkLimit) {
             ByteVector v    = ByteVector.fromArray(SPECIES, inp, p);
@@ -1039,6 +1048,7 @@ public final class JsonCursor implements JsonReadCursor {
             if (anyComments) checkComment(inp, p, lim);
             return;
         }
+
         while (p < lim) {
             final int b = inp[p] & 0xFF;
             if ((WS[b >>> 6] & (1L << (b & 63))) == 0) break;
@@ -1127,8 +1137,8 @@ public final class JsonCursor implements JsonReadCursor {
             i++;
         }
         return pureAscii
-            ? new String(inp, start, len)
-            : new String(inp, start, len, StandardCharsets.UTF_8);
+                ? new String(inp, start, len)
+                : new String(inp, start, len, StandardCharsets.UTF_8);
     }
 
     private static int findNextBackslashOrControl(byte[] inp, int from, int end, boolean checkCtrl) {
@@ -1239,8 +1249,8 @@ public final class JsonCursor implements JsonReadCursor {
                     int cp = (h1 << 12) | (h2 << 8) | (h3 << 4) | h4;
                     // surrogate pair
                     if (cp >= 0xD800 && cp <= 0xDBFF
-                        && i + 5 < endExclusive
-                        && inp[i] == '\\' && inp[i + 1] == 'u') {
+                            && i + 5 < endExclusive
+                            && inp[i] == '\\' && inp[i + 1] == 'u') {
                         final int l1 = HEX_VAL[inp[i + 2] & 0xFF];
                         final int l2 = HEX_VAL[inp[i + 3] & 0xFF];
                         final int l3 = HEX_VAL[inp[i + 4] & 0xFF];
@@ -1268,8 +1278,8 @@ public final class JsonCursor implements JsonReadCursor {
             }
         }
         return pureAscii
-            ? new String(buf, 0, out)
-            : new String(buf, 0, out, StandardCharsets.UTF_8);
+                ? new String(buf, 0, out)
+                : new String(buf, 0, out, StandardCharsets.UTF_8);
     }
 
     private int findStringEnd(int startQuote) {
@@ -1401,8 +1411,8 @@ public final class JsonCursor implements JsonReadCursor {
         final byte[] inp = input;
         if (allowNonNumericNumbers && !NUM_START[inp[start] & 0xFF]) {
             if (matchBytes(start, len, BYTES_NAN)
-                || matchBytes(start, len, BYTES_INF)
-                || matchBytes(start, len, BYTES_NEG_INF)) return 0;
+                    || matchBytes(start, len, BYTES_INF)
+                    || matchBytes(start, len, BYTES_NEG_INF)) return 0;
         }
         int i = start, end = start + len;
         boolean neg = false;
@@ -1420,8 +1430,8 @@ public final class JsonCursor implements JsonReadCursor {
         final byte[] inp = input;
         if (allowNonNumericNumbers && !NUM_START[inp[start] & 0xFF]) {
             if (matchBytes(start, len, BYTES_NAN)
-                || matchBytes(start, len, BYTES_INF)
-                || matchBytes(start, len, BYTES_NEG_INF)) return 0L;
+                    || matchBytes(start, len, BYTES_INF)
+                    || matchBytes(start, len, BYTES_NEG_INF)) return 0L;
         }
         int i = start, end = start + len;
         boolean neg = false;
@@ -1481,9 +1491,9 @@ public final class JsonCursor implements JsonReadCursor {
 
     private static long processInputAtIndex(byte[] inp, int i) {
         final int w = (inp[i]     & 0xFF)
-            | ((inp[i + 1] & 0xFF) << 8)
-            | ((inp[i + 2] & 0xFF) << 16)
-            | ((inp[i + 3] & 0xFF) << 24);
+                | ((inp[i + 1] & 0xFF) << 8)
+                | ((inp[i + 2] & 0xFF) << 16)
+                | ((inp[i + 3] & 0xFF) << 24);
         final int d = w - 0x30303030;
         if ((d & 0xF0F0F0F0) != 0)
             throw new NumberFormatException("Not a digit near byte " + i);
@@ -1491,8 +1501,7 @@ public final class JsonCursor implements JsonReadCursor {
         final int  d1 = (d >> 8)  & 0xFF;
         final int  d2 = (d >> 16) & 0xFF;
         final int  d3 = (d >> 24) & 0xFF;
-        final long r  = d0 * 1000L + d1 * 100L + d2 * 10L + d3;
-        return r;
+        return d0 * 1000L + d1 * 100L + d2 * 10L + d3;
     }
 
     private double parseDouble(final int start, final int len) {
@@ -1541,8 +1550,8 @@ public final class JsonCursor implements JsonReadCursor {
             }
             if (fracLen > 0) {
                 result += (fracLen <= POW10_OFFSET)
-                    ? fracPart * POW10[POW10_OFFSET - fracLen]
-                    : (double) fracPart / Math.pow(10, fracLen);
+                        ? fracPart * POW10[POW10_OFFSET - fracLen]
+                        : (double) fracPart / Math.pow(10, fracLen);
             }
         }
 
@@ -1581,8 +1590,8 @@ public final class JsonCursor implements JsonReadCursor {
 
     private RuntimeException error(String message) {
         return wrapExceptions
-            ? new JsonException(message)
-            : new IllegalStateException(message);
+                ? new JsonException(message)
+                : new IllegalStateException(message);
     }
 
     private static int writeUtf8(int cp, byte[] buf, int off) {
@@ -1612,13 +1621,13 @@ public final class JsonCursor implements JsonReadCursor {
 
     private static long readLongLE(byte[] buf, int off) {
         return  ((long) (buf[off]     & 0xFF))
-            | (((long) (buf[off + 1] & 0xFF)) << 8)
-            | (((long) (buf[off + 2] & 0xFF)) << 16)
-            | (((long) (buf[off + 3] & 0xFF)) << 24)
-            | (((long) (buf[off + 4] & 0xFF)) << 32)
-            | (((long) (buf[off + 5] & 0xFF)) << 40)
-            | (((long) (buf[off + 6] & 0xFF)) << 48)
-            | (((long) (buf[off + 7] & 0xFF)) << 56);
+                | (((long) (buf[off + 1] & 0xFF)) << 8)
+                | (((long) (buf[off + 2] & 0xFF)) << 16)
+                | (((long) (buf[off + 3] & 0xFF)) << 24)
+                | (((long) (buf[off + 4] & 0xFF)) << 32)
+                | (((long) (buf[off + 5] & 0xFF)) << 40)
+                | (((long) (buf[off + 6] & 0xFF)) << 48)
+                | (((long) (buf[off + 7] & 0xFF)) << 56);
     }
 
     @Contract(pure = true)
@@ -1654,7 +1663,7 @@ public final class JsonCursor implements JsonReadCursor {
             case TOK_NULL_TOK         -> consumeLiteralNull();
             case TOK_DIGIT, TOK_MINUS -> parseNumber();
             default -> throw new JsonException(
-                "Unknown value at byte " + pos + " ('" + (char) (input[pos] & 0xFF) + "')");
+                    "Unknown value at byte " + pos + " ('" + (char) (input[pos] & 0xFF) + "')");
         };
     }
 
@@ -1663,9 +1672,9 @@ public final class JsonCursor implements JsonReadCursor {
             throw new JsonException("Unexpected end of input at byte " + pos);
         final byte[] inp = input;
         final int w = (inp[pos]     & 0xFF)
-            | ((inp[pos + 1] & 0xFF) << 8)
-            | ((inp[pos + 2] & 0xFF) << 16)
-            | ((inp[pos + 3] & 0xFF) << 24);
+                | ((inp[pos + 1] & 0xFF) << 8)
+                | ((inp[pos + 2] & 0xFF) << 16)
+                | ((inp[pos + 3] & 0xFF) << 24);
         if (w != 0x65757274)
             throw new JsonException("Invalid literal at byte " + pos);
         pos += 4;
@@ -1677,9 +1686,9 @@ public final class JsonCursor implements JsonReadCursor {
             throw new JsonException("Unexpected end of input at byte " + pos);
         final byte[] inp = input;
         final int w = (inp[pos]     & 0xFF)
-            | ((inp[pos + 1] & 0xFF) << 8)
-            | ((inp[pos + 2] & 0xFF) << 16)
-            | ((inp[pos + 3] & 0xFF) << 24);
+                | ((inp[pos + 1] & 0xFF) << 8)
+                | ((inp[pos + 2] & 0xFF) << 16)
+                | ((inp[pos + 3] & 0xFF) << 24);
         if (w != 0x736C6166 || inp[pos + 4] != 'e')
             throw new JsonException("Invalid literal at byte " + pos);
         pos += 5;
@@ -1691,9 +1700,9 @@ public final class JsonCursor implements JsonReadCursor {
             throw new JsonException("Unexpected end of input at byte " + pos);
         final byte[] inp = input;
         final int w = (inp[pos]     & 0xFF)
-            | ((inp[pos + 1] & 0xFF) << 8)
-            | ((inp[pos + 2] & 0xFF) << 16)
-            | ((inp[pos + 3] & 0xFF) << 24);
+                | ((inp[pos + 1] & 0xFF) << 8)
+                | ((inp[pos + 2] & 0xFF) << 16)
+                | ((inp[pos + 3] & 0xFF) << 24);
         if (w != 0x6C6C756E)
             throw new JsonException("Invalid literal at byte " + pos);
         pos += 4;
@@ -1723,8 +1732,8 @@ public final class JsonCursor implements JsonReadCursor {
         }
         final long raw = parseLong(tokenStart, tokenLen);
         return (raw >= Integer.MIN_VALUE && raw <= Integer.MAX_VALUE)
-            ? new JsonInteger((int) raw)
-            : new JsonLong(raw);
+                ? new JsonInteger((int) raw)
+                : new JsonLong(raw);
     }
 
     @SuppressWarnings("ObjectAllocationInLoop")

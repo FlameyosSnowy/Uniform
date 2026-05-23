@@ -30,27 +30,27 @@ All benchmarks run with JMH in throughput mode (`ops/ms`, higher is better) on J
 
 | Category        | Uniform    | Jackson | simdjson-java¹ | Gson  |
 |-----------------|------------|---------|----------------|-------|
-| Read — Simple   | **5,984**  | 3,475   | 3,506          | 2,236 |
-| Read — Complex  | **2,918**  | 1,538   | 1,661          | 1,191 |
-| Write — Simple  | **19,268** | 5,390   | —              | 3,410 |
-| Write — Complex | **5,111**  | 2,971   | —              | 1,286 |
-| Pretty-print    | **1,027**  | 338     | —              | 227   |
+| Read - Simple   | **5,984**  | 3,475   | 3,506          | 2,236 |
+| Read - Complex  | **2,918**  | 1,538   | 1,661          | 1,191 |
+| Write - Simple  | **19,268** | 5,390   | -              | 3,410 |
+| Write - Complex | **5,111**  | 2,971   | -              | 1,286 |
+| Pretty-print    | **1,027**  | 338     | -              | 227   |
 
-¹ [simdjson-java](https://github.com/simdjson/simdjson-java) is the official Java port of simdjson — it is a pure parser with no write path.
+¹ [simdjson-java](https://github.com/simdjson/simdjson-java) is the official Java port of simdjson - it is a pure parser with no write path.
 
 ---
 
 ## Features
 
-- **Compile-time code generation** — annotation processor generates a dedicated reader and writer per class; zero reflection at runtime
-- **SIMD-accelerated scanning** — structural character classification and string boundary detection via `jdk.incubator.vector`
-- **Collection support** — `List`, `Set`, `Queue`, `Map<String, V>`, and primitive/object arrays
-- **Nested and recursive types** — generated readers wire directly to each other, no registry lookup in the hot path
-- **Interface / abstract fields** — resolved via `@Resolves` or `@ContextDynamicSupplier`
-- **Configurable read features** — single quotes, unquoted field names, trailing commas, comments (Java + YAML), leading zeros, NaN/Infinity, and more
-- **Configurable write features** — null value handling, empty collection suppression, Unicode escaping, numbers-as-strings
-- **Pretty printing** — `JsonFormatter` with configurable indent, ~3× faster than Jackson
-- **Records** — full support alongside regular classes
+- **Compile-time code generation** - annotation processor generates a dedicated reader and writer per class; zero reflection at runtime
+- **SIMD-accelerated scanning** - structural character classification and string boundary detection via `jdk.incubator.vector`
+- **Collection support** - `List`, `Set`, `Queue`, `Map<String, V>`, and primitive/object arrays
+- **Nested and recursive types** - generated readers wire directly to each other, no registry lookup in the hot path
+- **Interface / abstract fields** - resolved via `@Resolves` or `@ContextDynamicSupplier`
+- **Configurable read features** - single quotes, unquoted field names, trailing commas, comments (Java + YAML), leading zeros, NaN/Infinity, and more
+- **Configurable write features** - null value handling, empty collection suppression, Unicode escaping, numbers-as-strings
+- **Pretty printing** - `JsonFormatter` with configurable indent, ~3× faster than Jackson
+- **Records** - full support alongside regular classes
 
 ---
 
@@ -289,7 +289,7 @@ Your POJO  annotationprocessor ──▶   MyPojo_JsonReader.java
                         └──────────────────────────────────────┘
 ```
 
-**Read path:** `VectorByteScanner` makes one SIMD pass over the input to build structural and quote bitmasks. `JsonCursor` walks those bitmasks with `Long.numberOfTrailingZeros` dispatch — no byte-by-byte scanning in the hot path. The generated reader dispatches on FNV-1a field name hashes via a `switch` statement.
+**Read path:** `VectorByteScanner` makes one SIMD pass over the input to build structural and quote bitmasks. `JsonCursor` walks those bitmasks with `Long.numberOfTrailingZeros` dispatch - no byte-by-byte scanning in the hot path. The generated reader dispatches on FNV-1a field name hashes via a `switch` statement.
 
 **Write path:** `JsonStringWriter` creates a new `StringBuilder`. String escaping uses a 256-entry lookup table for the fast path. The generated writer calls `out.nameAscii()` / `out.value()` directly with no intermediate representation.
 
@@ -324,10 +324,10 @@ cd Uniform
 ```
 
 **Guidelines:**
-- Keep the hot path allocation-free — verify with `-XX:+PrintCompilation` or async-profiler before submitting
+- Keep the hot path allocation-free - verify with `-XX:+PrintCompilation` or async-profiler before submitting
 - New collection types or read/write features must include both a smoke test and a round-trip test
 - Processor changes must regenerate cleanly under incremental compilation (`./gradlew clean build`)
-- Match the existing code style — no Lombok, no extra dependencies in `core` or `json`
+- Match the existing code style - no Lombok, no extra dependencies in `core` or `json`
 
 ---
 

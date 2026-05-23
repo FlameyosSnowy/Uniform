@@ -69,6 +69,22 @@ public final class JsonDomCursor implements JsonReadCursor {
         return true;
     }
 
+    @Override
+    public boolean enterObjectValue() {
+        JsonValue value = currentFieldValue();
+        if (!(value instanceof JsonObject obj)) return false;
+        // Re-point this cursor's object-iteration state at the nested object
+        objectEntries = new ArrayList<>(obj.entries());
+        objectIndex = -1;
+        currentEntry = null;
+        return true;
+    }
+
+    @Override
+    public void finishFieldAfterValue() {
+
+    }
+
     private Map.Entry<String, JsonValue> currentEntry;
 
     @Override
@@ -175,6 +191,11 @@ public final class JsonDomCursor implements JsonReadCursor {
         if (!(node instanceof JsonArray arr)) return false;
         arrayIndex++;
         return arrayIndex < arr.size();
+    }
+
+    @Override
+    public @NotNull String fieldValueParseString() {
+        return coerceString(currentElement());
     }
 
     @Override

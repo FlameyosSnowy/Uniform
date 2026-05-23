@@ -19,7 +19,7 @@ import static java.lang.constant.ConstantDescs.*;
  * target class at runtime using the Java 21 ClassFile API, then loads it as a
  * hidden class so it can be GC'd if the target class is unloaded.
  *
- * <p>Generated classes are cached in {@link JsonMapperRegistry} — subsequent
+ * <p>Generated classes are cached in {@link JsonMapperRegistry} - subsequent
  * lookups are as fast as compile-time generated mappers.
  */
 public final class ReflectionMapperFactory {
@@ -36,7 +36,7 @@ public final class ReflectionMapperFactory {
 
     /**
      * Builds, loads, registers, and returns a {@link JsonMapper} for {@code type}.
-     * Thread-safe — concurrent callers for the same type will both generate but
+     * Thread-safe - concurrent callers for the same type will both generate but
      * only one will win the {@code putIfAbsent} in the registry.
      */
     @SuppressWarnings("unchecked")
@@ -102,7 +102,7 @@ public final class ReflectionMapperFactory {
      * For simplicity the generated code uses the reflection-metadata at runtime
      * via a static field holding the ReflectionMetadata, keeping the bytecode
      * small and correct. The hot path (field-name dispatch) is a cascade of
-     * String.equals() — identical to what the annotation processor generates.
+     * String.equals() - identical to what the annotation processor generates.
      */
     private static byte[] generateReader(Class<?> type, ReflectionMetadata meta) {
         ClassFile cf = ClassFile.of();

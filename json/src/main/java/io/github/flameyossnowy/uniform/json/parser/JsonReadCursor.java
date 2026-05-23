@@ -1,8 +1,6 @@
 package io.github.flameyossnowy.uniform.json.parser;
 
-import io.github.flameyossnowy.uniform.json.parser.lowlevel.ByteSlice;
-import io.github.flameyossnowy.uniform.json.parser.lowlevel.JsonCursor;
-import io.github.flameyossnowy.uniform.json.parser.lowlevel.MapJsonCursor;
+import io.github.flameyossnowy.uniform.json.parser.lowlevel.*;
 import org.jetbrains.annotations.NotNull;
 
 /**
@@ -49,6 +47,57 @@ public interface JsonReadCursor {
     boolean enterObject();
 
     /**
+     * Descends in-place into the current field's value, treating it as a JSON object.
+     *
+     * <p>Unlike {@link #fieldValueCursor()}, which allocates a new sub-cursor, this
+     * method mutates the cursor itself so that subsequent {@link #nextField()} calls
+     * iterate the nested object's fields. This is the in-place equivalent of
+     * {@link #enterObject()} but scoped to the current field value rather than the
+     * root node.
+     *
+     * <p>Returns {@code false} - and leaves the cursor state unchanged - if:
+     * <ul>
+     *   <li>there is no current field (i.e. {@link #nextField()} has not been called), or</li>
+     *   <li>the current field's value is not a JSON object (e.g. it is an array,
+     *       scalar, or {@code null}).</li>
+     * </ul>
+     *
+     * <p><b>Byte-stream cursors</b> ({@link JsonCursor}): advances {@code pos} past
+     * the opening {@code '{'} and resets value-length state so the nested fields are
+     * parsed from the correct offset. After the nested parse is complete, the caller
+     * must invoke {@link #finishFieldAfterValue()} to consume the trailing comma (if
+     * any) so that the outer {@link #nextField()} loop sees the next sibling field.
+     *
+     * <p><b>DOM / map cursors</b> ({@link JsonDomCursor}, {@link JsonObjectCursor},
+     * {@link MapJsonCursor}): resets the internal iterator or index to the entries of
+     * the nested object. {@link #finishFieldAfterValue()} is a no-op for these cursors
+     * because there is no byte stream to advance.
+     *
+     * @return {@code true} if the cursor successfully descended into a nested object;
+     *         {@code false} otherwise
+     */
+    boolean enterObjectValue();
+
+    /**
+     * Called after a nested parse initiated by {@link #enterObjectValue()} (or the
+     * array equivalent) has completed, to restore the outer cursor to a consistent
+     * state ready for the next {@link #nextField()} call.
+     *
+     * <p><b>Byte-stream cursors</b> ({@link JsonCursor}): consumes the trailing comma
+     * that follows the closing {@code '}'} or {@code ']'} of the nested value, if one
+     * is present. Without this call the outer {@link #nextField()} would see the comma
+     * as the start of the next token and fail to parse the subsequent field name.
+     *
+     * <p><b>DOM / map cursors</b> ({@link JsonDomCursor}, {@link JsonObjectCursor},
+     * {@link MapJsonCursor}): this is a deliberate no-op. Iteration in these cursors
+     * is driven by an {@link java.util.Iterator} or an index into a list, so the
+     * "current position" is always already advanced past the consumed entry the moment
+     * {@link #nextField()} returned. There is no comma byte to consume and no position
+     * to fix up.
+     */
+    void finishFieldAfterValue();
+
+    /**
      * Advances to the next field of the current object, populating the
      * field-name and field-value slots.
      *
@@ -73,6 +122,11 @@ public interface JsonReadCursor {
      *         the closing {@code ']'} (or end of list) is reached.
      */
     boolean nextElement();
+
+    /**
+     * @return the parsed field value as string
+     */
+    @NotNull String fieldValueParseString();
 
     void skipFieldValue();
 

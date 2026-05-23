@@ -16,7 +16,7 @@ public final class ReflectionMetadata {
         Class<?>  type,
         Type      genericType,   // for best-effort List<X> support
         Member    reader,        // Field or Method (getter / record accessor)
-        Member    writer,        // Field or Method (setter) — null for records
+        Member    writer,        // Field or Method (setter) - null for records
         Class<?>  owner
     ) {
         public Object read(Object instance) throws ReflectiveOperationException {
@@ -27,7 +27,7 @@ public final class ReflectionMetadata {
             };
         }
 
-        /** For records, writer is null — use the canonical constructor instead. */
+        /** For records, writer is null - use the canonical constructor instead. */
         public void write(Object instance, Object value) throws ReflectiveOperationException {
             switch (writer) {
                 case Field  f -> f.set(instance, value);

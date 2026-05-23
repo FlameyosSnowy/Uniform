@@ -38,7 +38,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 
 /**
- * Registry of {@link CoreTypeResolver} instances — the single source of truth for
+ * Registry of {@link CoreTypeResolver} instances - the single source of truth for
  * all {@link JsonValue} ↔ Java type conversions outside generated POJO mappers.
  *
  * <h3>Built-in resolvers</h3>
@@ -63,7 +63,7 @@ import java.util.function.Function;
  */
 public final class CoreTypeResolverRegistry {
 
-    /** Singleton — shared across all {@code JsonAdapter} instances. */
+    /** Singleton - shared across all {@code JsonAdapter} instances. */
     public static final CoreTypeResolverRegistry INSTANCE = new CoreTypeResolverRegistry();
 
     @SuppressWarnings("rawtypes")
@@ -367,7 +367,7 @@ public final class CoreTypeResolverRegistry {
         return bad(v, target);
     }
 
-    /** Always throws — used as an expression in switch arms that need a return type. */
+    /** Always throws - used as an expression in switch arms that need a return type. */
     @Contract("_, _ -> fail")
     private static <T> T bad(@NotNull JsonValue v, @NotNull Class<?> target) {
         throw new IllegalArgumentException(

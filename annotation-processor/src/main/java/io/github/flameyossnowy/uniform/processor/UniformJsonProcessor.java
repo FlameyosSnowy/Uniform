@@ -58,21 +58,21 @@ import java.util.Set;
 @SupportedSourceVersion(SourceVersion.RELEASE_17)
 public final class UniformJsonProcessor extends AbstractProcessor {
     private static final Set<String> CORE_RESOLVED_FQCNS = Set.of(
-        "java.math.BigInteger", "java.math.BigDecimal", "java.util.UUID",
-        "java.net.URI", "java.net.URL", "java.nio.file.Path",
-        "java.time.LocalDate", "java.time.LocalTime", "java.time.LocalDateTime",
-        "java.time.ZonedDateTime", "java.time.OffsetDateTime", "java.time.OffsetTime",
-        "java.time.Instant", "java.time.Duration", "java.time.Period",
-        "java.time.Year", "java.time.YearMonth", "java.time.MonthDay",
-        "java.time.Month", "java.time.ZoneId", "java.util.TimeZone"
+            "java.math.BigInteger", "java.math.BigDecimal", "java.util.UUID",
+            "java.net.URI", "java.net.URL", "java.nio.file.Path",
+            "java.time.LocalDate", "java.time.LocalTime", "java.time.LocalDateTime",
+            "java.time.ZonedDateTime", "java.time.OffsetDateTime", "java.time.OffsetTime",
+            "java.time.Instant", "java.time.Duration", "java.time.Period",
+            "java.time.Year", "java.time.YearMonth", "java.time.MonthDay",
+            "java.time.Month", "java.time.ZoneId", "java.util.TimeZone"
     );
 
     private static final ClassName CORE_REGISTRY =
-        ClassName.get("io.github.flameyossnowy.uniform.json.resolvers", "CoreTypeResolverRegistry");
+            ClassName.get("io.github.flameyossnowy.uniform.json.resolvers", "CoreTypeResolverRegistry");
     private static final ClassName CORE_RESOLVER =
-        ClassName.get("io.github.flameyossnowy.uniform.json.resolvers", "CoreTypeResolver");
+            ClassName.get("io.github.flameyossnowy.uniform.json.resolvers", "CoreTypeResolver");
     private static final ClassName JSON_VALUE =
-        ClassName.get("io.github.flameyossnowy.uniform.json.dom", "JsonValue");
+            ClassName.get("io.github.flameyossnowy.uniform.json.dom", "JsonValue");
 
     private static final String FIELD_TRUE  = "__BTRUE";
     private static final String FIELD_FALSE = "__BFALSE";
@@ -154,7 +154,7 @@ public final class UniformJsonProcessor extends AbstractProcessor {
             if (declared == null || declared.getKind() != TypeKind.DECLARED) continue;
             TypeElement declaredType = (TypeElement) ((DeclaredType) declared).asElement();
             suppliers.put(elements.getBinaryName(declaredType).toString(),
-                elements.getBinaryName(supplierType).toString());
+                    elements.getBinaryName(supplierType).toString());
         }
         return suppliers;
     }
@@ -186,9 +186,9 @@ public final class UniformJsonProcessor extends AbstractProcessor {
         Set<String> candidates = new HashSet<>();
         candidates.add("get" + capitalized);
         if (fieldType.getKind() == TypeKind.BOOLEAN
-            || (fieldType.getKind() == TypeKind.DECLARED
-            && elements.getBinaryName((TypeElement) ((DeclaredType) fieldType).asElement())
-            .toString().equals("java.lang.Boolean"))) {
+                || (fieldType.getKind() == TypeKind.DECLARED
+                && elements.getBinaryName((TypeElement) ((DeclaredType) fieldType).asElement())
+                .toString().equals("java.lang.Boolean"))) {
             candidates.add("is" + capitalized);
         }
         for (Element e : type.getEnclosedElements()) {
@@ -222,13 +222,13 @@ public final class UniformJsonProcessor extends AbstractProcessor {
         String jvVar = "__jv_" + varName;
         cb.addStatement("$T $L = $L.$L()", JSON_VALUE, jvVar, cursorExpr, valueMethod);
         cb.addStatement("$L = ($T) $T.INSTANCE.resolve($T.class).deserialize($L)",
-            varName, type.box(), CORE_REGISTRY, type.box(), jvVar);
+                varName, type.box(), CORE_REGISTRY, type.box(), jvVar);
     }
 
     private static void emitCoreWrite(CodeBlock.Builder cb, TypeName type,
                                       String valueExpr, String jvVar) {
         cb.addStatement("$T $L = (($T<$T>) $T.INSTANCE.resolve($T.class)).serialize($L)",
-            JSON_VALUE, jvVar, CORE_RESOLVER, type.box(), CORE_REGISTRY, type.box(), valueExpr);
+                JSON_VALUE, jvVar, CORE_RESOLVER, type.box(), CORE_REGISTRY, type.box(), valueExpr);
         cb.addStatement("out.writeJsonValue($L)", jvVar);
     }
 
@@ -251,10 +251,6 @@ public final class UniformJsonProcessor extends AbstractProcessor {
         return sb.toString();
     }
 
-    /**
-     * Returns the compile-time FNV-1a hash constant name for a JSON field name.
-     * Generated into reader classes as: {@code private static final int __H_fieldName = <hash>;}
-     */
     private static String hashConstantName(String jsonName) {
         StringBuilder sb = new StringBuilder(HASH_CONST_PREFIX);
         for (int i = 0; i < jsonName.length(); i++) {
@@ -290,6 +286,20 @@ public final class UniformJsonProcessor extends AbstractProcessor {
         return v;
     }
 
+    /**
+     * Returns the zero-value literal for a primitive TypeName.
+     * Used to initialize primitive local variables so constructor calls don't NPE
+     * when a field is absent from the JSON (e.g. int stays 0, boolean stays false).
+     */
+    private static String primitiveZero(TypeName t) {
+        if (t.equals(TypeName.BOOLEAN)) return "false";
+        if (t.equals(TypeName.LONG))    return "0L";
+        if (t.equals(TypeName.FLOAT))   return "0.0f";
+        if (t.equals(TypeName.DOUBLE))  return "0.0";
+        // byte, short, int, char
+        return "0";
+    }
+
     private GeneratedType generateFor(TypeElement type, Map<String, String> dynamicSuppliers,
                                       Deque<TypeElement> enqueue) throws IOException {
         ClassName target = ClassName.get(type);
@@ -298,13 +308,12 @@ public final class UniformJsonProcessor extends AbstractProcessor {
 
         if (pkg.isEmpty()) {
             processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR,
-                "Types annotated with @SerializedObject must be in a named package.", type);
+                    "Types annotated with @SerializedObject must be in a named package.", type);
             ClassName moduleName = ClassName.get("generated", simple + "_JsonModule");
             return new GeneratedType(moduleName);
         }
 
-        String flatSimple = target.simpleNames().stream()
-            .collect(java.util.stream.Collectors.joining("_"));
+        String flatSimple = String.join("_", target.simpleNames());
         String generatedPkg = pkg + ".generated";
 
         List<Property> properties = collectProperties(type, dynamicSuppliers, enqueue);
@@ -332,7 +341,7 @@ public final class UniformJsonProcessor extends AbstractProcessor {
                 String javaName = rc.getSimpleName().toString();
                 String jsonName = jsonNameFor(rc, javaName);
                 props.add(buildProperty(type, rc, javaName, jsonName, rc.asType(),
-                    AccessKind.RECORD_COMPONENT, javaName, null, dynamicSuppliers, enqueue));
+                        AccessKind.RECORD_COMPONENT, javaName, null, dynamicSuppliers, enqueue));
             }
             return props;
         }
@@ -352,16 +361,16 @@ public final class UniformJsonProcessor extends AbstractProcessor {
                 if (getter != null) {
                     String getterName = getter.getSimpleName().toString();
                     props.add(buildProperty(type, f, javaName, jsonName, f.asType(),
-                        AccessKind.GETTER, getterName, getterName, dynamicSuppliers, enqueue));
+                            AccessKind.GETTER, getterName, getterName, dynamicSuppliers, enqueue));
                 } else {
                     processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR,
-                        "Field '" + type.getSimpleName() + "." + javaName + "' is not public and has no "
-                            + "accessible getter.", f);
+                            "Field '" + type.getSimpleName() + "." + javaName + "' is not public and has no "
+                                    + "accessible getter.", f);
                 }
                 continue;
             }
             props.add(buildProperty(type, f, javaName, jsonName, f.asType(),
-                AccessKind.FIELD, javaName, null, dynamicSuppliers, enqueue));
+                    AccessKind.FIELD, javaName, null, dynamicSuppliers, enqueue));
         }
 
         Map<String, Property> propByJavaName = new LinkedHashMap<>(props.size());
@@ -382,15 +391,15 @@ public final class UniformJsonProcessor extends AbstractProcessor {
                 String javaName = methodName;
                 String jsonName = jsonNameFor(m, javaName);
                 props.add(buildProperty(type, m, javaName, jsonName, m.getReturnType(),
-                    AccessKind.GETTER, javaName, javaName, dynamicSuppliers, enqueue));
-                propByJavaName.put(javaName, props.get(props.size() - 1));
+                        AccessKind.GETTER, javaName, javaName, dynamicSuppliers, enqueue));
+                propByJavaName.put(javaName, props.getLast());
                 continue;
             }
 
             if (m.getParameters().size() != 1) continue;
             if (m.getReturnType().getKind() != TypeKind.VOID) continue;
 
-            TypeMirror paramType = m.getParameters().get(0).asType();
+            TypeMirror paramType = m.getParameters().getFirst().asType();
             SerializedField sf = m.getAnnotation(SerializedField.class);
             SerializedName  sn = m.getAnnotation(SerializedName.class);
 
@@ -406,17 +415,17 @@ public final class UniformJsonProcessor extends AbstractProcessor {
             Property existing = propByJavaName.get(targetFieldName);
             if (existing != null) {
                 String jsonName = (sf != null || sn != null)
-                    ? jsonNameFor(m, existing.jsonName()) : existing.jsonName();
+                        ? jsonNameFor(m, existing.jsonName()) : existing.jsonName();
                 String readAccessor = existing.readAccessor() != null ? existing.readAccessor()
-                    : (existing.accessKind() == AccessKind.GETTER ? existing.accessor() : null);
+                        : (existing.accessKind() == AccessKind.GETTER ? existing.accessor() : null);
                 propByJavaName.put(targetFieldName, new Property(
-                    existing.javaName(), jsonName, existing.typeName(), existing.typeMirror(),
-                    AccessKind.SETTER, methodName, readAccessor,
-                    existing.abstractOrInterface(), existing.resolverFqcn()));
+                        existing.javaName(), jsonName, existing.typeName(), existing.typeMirror(),
+                        AccessKind.SETTER, methodName, readAccessor,
+                        existing.abstractOrInterface(), existing.resolverFqcn()));
             } else {
                 String jsonName = jsonNameFor(m, targetFieldName);
                 Property newProp = buildProperty(type, m, targetFieldName, jsonName,
-                    paramType, AccessKind.SETTER, methodName, null, dynamicSuppliers, enqueue);
+                        paramType, AccessKind.SETTER, methodName, null, dynamicSuppliers, enqueue);
                 propByJavaName.put(targetFieldName, newProp);
             }
         }
@@ -432,7 +441,7 @@ public final class UniformJsonProcessor extends AbstractProcessor {
                                    Map<String, String> dynamicSuppliers, Deque<TypeElement> enqueue) {
         TypeName typeName = TypeName.get(typeMirror);
         Property property = new Property(javaName, jsonName, typeName, typeMirror, accessKind,
-            accessor, readAccessor, false, null);
+                accessor, readAccessor, false, null);
         if (typeMirror.getKind() == TypeKind.ARRAY) return property;
 
         if (typeMirror.getKind() == TypeKind.DECLARED) {
@@ -451,14 +460,14 @@ public final class UniformJsonProcessor extends AbstractProcessor {
                 if (isCoreResolved(typeMirror)) return property;
 
                 boolean absOrIface = typeElement.getKind() == ElementKind.INTERFACE
-                    || typeElement.getModifiers().contains(Modifier.ABSTRACT);
+                        || typeElement.getModifiers().contains(Modifier.ABSTRACT);
                 String resolverFqcn = null;
                 Resolves resolves = annotatedElement.getAnnotation(Resolves.class);
                 if (resolves != null) {
                     TypeMirror mirror = getClassValueMirror(resolves);
                     if (mirror != null && mirror.getKind() == TypeKind.DECLARED) {
                         resolverFqcn = elements.getBinaryName(
-                            (TypeElement) ((DeclaredType) mirror).asElement()).toString();
+                                (TypeElement) ((DeclaredType) mirror).asElement()).toString();
                     }
                 }
                 if (!absOrIface) {
@@ -468,13 +477,13 @@ public final class UniformJsonProcessor extends AbstractProcessor {
                     boolean hasDynamic  = dynamicSuppliers.containsKey(declaredFqcn);
                     if (resolverFqcn == null && !hasDynamic) {
                         processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR,
-                            "Interface/abstract property '" + owner.getSimpleName() + "." + javaName
-                                + "' of type '" + declaredFqcn + "' requires @Resolves or a "
-                                + "@ContextDynamicSupplier for that declared type.", annotatedElement);
+                                "Interface/abstract property '" + owner.getSimpleName() + "." + javaName
+                                        + "' of type '" + declaredFqcn + "' requires @Resolves or a "
+                                        + "@ContextDynamicSupplier for that declared type.", annotatedElement);
                     }
                 }
                 return new Property(javaName, jsonName, typeName, typeMirror, accessKind, accessor,
-                    readAccessor, absOrIface, resolverFqcn);
+                        readAccessor, absOrIface, resolverFqcn);
             }
         }
         return property;
@@ -483,7 +492,7 @@ public final class UniformJsonProcessor extends AbstractProcessor {
     private boolean shouldEnqueueForCodegen(TypeElement type) {
         String qn = elements.getBinaryName(type).toString();
         if (qn.startsWith("java.") || qn.startsWith("javax.") || qn.startsWith("jdk.")
-            || qn.startsWith("sun.") || qn.startsWith("org.jetbrains.")) return false;
+                || qn.startsWith("sun.") || qn.startsWith("org.jetbrains.")) return false;
         return type.getKind() == ElementKind.CLASS || type.getKind() == ElementKind.RECORD;
     }
 
@@ -502,85 +511,70 @@ public final class UniformJsonProcessor extends AbstractProcessor {
         ClassName jsonConfig = ClassName.get("io.github.flameyossnowy.uniform.json", "JsonConfig");
 
         TypeSpec.Builder classBuilder = TypeSpec.classBuilder(readerName)
-            .addAnnotation(AnnotationSpec.builder(Generated.class)
-                .addMember("value", "\"io.github.flameyossnowy.uniform.processor.UniformJsonProcessor\"")
-                .build())
-            .addModifiers(Modifier.PUBLIC, Modifier.FINAL)
-            .addSuperinterface(ParameterizedTypeName.get(jsonMapper, target))
-            .addField(FieldSpec.builder(jsonConfig, "__config",
-                Modifier.PRIVATE, Modifier.STATIC, Modifier.VOLATILE).build())
-            .addMethod(MethodSpec.methodBuilder("setConfig")
-                .addModifiers(Modifier.PUBLIC, Modifier.STATIC)
-                .addParameter(jsonConfig, "cfg")
-                .addStatement("__config = cfg")
-                .build())
-            .addField(ParameterizedTypeName.get(jsonMapper, target), "INSTANCE",
-                Modifier.PUBLIC, Modifier.STATIC, Modifier.FINAL)
-            .addStaticBlock(CodeBlock.builder()
-                .addStatement("INSTANCE = new $T()", readerName)
-                .build())
-            .addMethod(MethodSpec.constructorBuilder().addModifiers(Modifier.PRIVATE).build())
-            .addMethod(MethodSpec.methodBuilder("stripQuotes")
-                .addModifiers(Modifier.PRIVATE, Modifier.STATIC)
-                .returns(String.class)
-                .addParameter(String.class, "s")
-                .addStatement("if (s == null) return null")
-                .addStatement("int len = s.length()")
-                .addStatement("if (len >= 2 && s.charAt(0) == '\"' && s.charAt(len - 1) == '\"') return s.substring(1, len - 1)")
-                .addStatement("return s")
-                .build());
+                .addAnnotation(AnnotationSpec.builder(Generated.class)
+                        .addMember("value", "\"io.github.flameyossnowy.uniform.processor.UniformJsonProcessor\"")
+                        .build())
+                .addModifiers(Modifier.PUBLIC, Modifier.FINAL)
+                .addSuperinterface(ParameterizedTypeName.get(jsonMapper, target))
+                .addField(FieldSpec.builder(jsonConfig, "__config",
+                        Modifier.PRIVATE, Modifier.STATIC, Modifier.VOLATILE).build())
+                .addMethod(MethodSpec.methodBuilder("setConfig")
+                        .addModifiers(Modifier.PUBLIC, Modifier.STATIC)
+                        .addParameter(jsonConfig, "cfg")
+                        .addStatement("__config = cfg")
+                        .build())
+                .addField(ParameterizedTypeName.get(jsonMapper, target), "INSTANCE",
+                        Modifier.PUBLIC, Modifier.STATIC, Modifier.FINAL)
+                .addStaticBlock(CodeBlock.builder()
+                        .addStatement("INSTANCE = new $T()", readerName)
+                        .build())
+                .addMethod(MethodSpec.constructorBuilder().addModifiers(Modifier.PRIVATE).build())
+                .addMethod(MethodSpec.methodBuilder("stripQuotes")
+                        .addModifiers(Modifier.PRIVATE, Modifier.STATIC)
+                        .returns(String.class)
+                        .addParameter(String.class, "s")
+                        .addStatement("if (s == null) return null")
+                        .addStatement("int len = s.length()")
+                        .addStatement("if (len >= 2 && s.charAt(0) == '\"' && s.charAt(len - 1) == '\"') return s.substring(1, len - 1)")
+                        .addStatement("return s")
+                        .build());
 
-        // Emit compile-time FNV-1a hash constants for hash-switch dispatch
-        // e.g. private static final int __H_id = -1305444774;
-        // This lets the switch statement use human-readable names:
-        //   case __H_id: if (cursor.fieldNameEquals("id")) { ... }
-        // The JIT sees these as identical to inline integer literals.
         boolean useHashSwitch = props.size() > SMALL_OBJECT_THRESHOLD;
         if (useHashSwitch) {
             addHashConstantsTo(classBuilder, props);
         }
 
         MethodSpec readFields = MethodSpec.methodBuilder("readFields")
-            .addModifiers(Modifier.PUBLIC) // public so cross-package generated readers can call it
-            .returns(target)
-            .addParameter(jsonCursor, "cursor")
-            .addCode(buildReaderBody(typeElement, target, props))
-            .build();
+                .addModifiers(Modifier.PUBLIC)
+                .returns(target)
+                .addParameter(jsonCursor, "cursor")
+                .addCode(buildReaderBody(typeElement, target, props))
+                .build();
 
         MethodSpec map = MethodSpec.methodBuilder("map")
-            .addAnnotation(Override.class)
-            .addModifiers(Modifier.PUBLIC)
-            .returns(target)
-            .addParameter(jsonCursor, "cursor")
-            .addStatement("if (!cursor.enterObject()) return null")
-            .addStatement("return readFields(cursor)")
-            .build();
+                .addAnnotation(Override.class)
+                .addModifiers(Modifier.PUBLIC)
+                .returns(target)
+                .addParameter(jsonCursor, "cursor")
+                .addStatement("if (!cursor.enterObject()) return null")
+                .addStatement("return readFields(cursor)")
+                .build();
 
         classBuilder.addMethod(readFields);
         classBuilder.addMethod(map);
 
         JavaFile.builder(readerName.packageName(), classBuilder.build())
-            .build().writeTo(processingEnv.getFiler());
+                .build().writeTo(processingEnv.getFiler());
     }
 
-    /**
-     * Adds compile-time FNV-1a hash constants to the reader TypeSpec.
-     * These are referenced by name in the switch cases, producing clearer
-     * generated code while remaining identical to inline integer literals
-     * at the JVM level.
-     *
-     * Example output:
-     *   private static final int __H_id   = -1305444774;
-     *   private static final int __H_name = 2987074;
-     */
     private void addHashConstantsTo(TypeSpec.Builder classBuilder, List<Property> props) {
         for (Property p : props) {
             int hash = fnv1a(p.jsonName());
             classBuilder.addField(
-                FieldSpec.builder(TypeName.INT, hashConstantName(p.jsonName()),
-                        Modifier.PRIVATE, Modifier.STATIC, Modifier.FINAL)
-                    .initializer("$L", hash)
-                    .build()
+                    FieldSpec.builder(TypeName.INT, hashConstantName(p.jsonName()),
+                                    Modifier.PRIVATE, Modifier.STATIC, Modifier.FINAL)
+                            .initializer("$L", hash)
+                            .build()
             );
         }
     }
@@ -589,8 +583,18 @@ public final class UniformJsonProcessor extends AbstractProcessor {
         CodeBlock.Builder cb = CodeBlock.builder();
         ClassName readFeature = ClassName.get("io.github.flameyossnowy.uniform.json.features", "JsonReadFeature");
 
+        // KEY FIX: emit the correct zero literal for primitive types so that
+        // the constructor call never tries to unbox a null Integer/Long/etc.
+        // Previously every field was declared as its boxed form initialised to null,
+        // meaning `new Foo(id, name)` would NPE on unboxing when "id" was absent.
         for (Property p : props) {
-            cb.addStatement("$T $L = null", boxIfPrimitive(p.typeName()), p.javaName());
+            TypeName t = p.typeName();
+            if (t.isPrimitive()) {
+                // e.g. "int id = 0;" - stays an int, constructor call never unboxes null
+                cb.addStatement("$T $L = $L", t, p.javaName(), primitiveZero(t));
+            } else {
+                cb.addStatement("$T $L = null", t, p.javaName());
+            }
         }
 
         cb.addStatement("final boolean __strictDupes = __config != null && __config.hasReadFeature($T.STRICT_DUPLICATE_DETECTION)", readFeature);
@@ -613,8 +617,8 @@ public final class UniformJsonProcessor extends AbstractProcessor {
             callConstructor(target, props, cb);
         } else {
             List<Property> assignable = props.stream()
-                .filter(p -> p.accessKind() != AccessKind.GETTER)
-                .toList();
+                    .filter(p -> p.accessKind() != AccessKind.GETTER)
+                    .toList();
             ExecutableElement fullArgCtor = findFullArgConstructor(typeElement, assignable);
             if (fullArgCtor != null) {
                 callConstructor(target, assignable, cb);
@@ -622,8 +626,8 @@ public final class UniformJsonProcessor extends AbstractProcessor {
                 boolean hasNoArgCtor = hasNoArgConstructor(typeElement);
                 if (!hasNoArgCtor) {
                     processingEnv.getMessager().printMessage(Diagnostic.Kind.WARNING,
-                        "'" + typeElement.getSimpleName() + "' has no full-arg or no-arg constructor.",
-                        typeElement);
+                            "'" + typeElement.getSimpleName() + "' has no full-arg or no-arg constructor.",
+                            typeElement);
                 }
                 cb.addStatement("$T __obj = new $T()", target, target);
                 for (Property p : assignable) {
@@ -656,8 +660,6 @@ public final class UniformJsonProcessor extends AbstractProcessor {
 
         if (!props.isEmpty()) {
             cb.nextControlFlow("else");
-            // Unknown field: skip its value to keep pos consistent.
-            // The structural bitmask makes this O(n/64) word ops for nested values.
             cb.addStatement("cursor.skipFieldValue()");
             cb.endControlFlow();
         }
@@ -669,7 +671,6 @@ public final class UniformJsonProcessor extends AbstractProcessor {
         cb.beginControlFlow("switch (__h)");
 
         for (Property p : props) {
-            // Use the named constant rather than an inline integer literal.
             String hashConst = hashConstantName(p.jsonName());
             cb.beginControlFlow("case $L:", hashConst);
             cb.beginControlFlow("if (cursor.fieldNameEquals($S))", p.jsonName());
@@ -743,8 +744,6 @@ public final class UniformJsonProcessor extends AbstractProcessor {
                 default    -> ParameterizedTypeName.get(ClassName.get("java.util", "List"),  argType.box());
             };
 
-            // enterArrayValue() moves pos to after '[' in-place.
-            // If the value is null/absent it returns false.
             cb.addStatement("if (!$L.enterArrayValue()) $L = null", cursorExpr, var);
             cb.beginControlFlow("else");
             cb.addStatement("$T __col = new $T<>()", ifaceType, implClass);
@@ -797,38 +796,39 @@ public final class UniformJsonProcessor extends AbstractProcessor {
 
             if (!keyType.equals(ClassName.get(String.class))) {
                 processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR,
-                    "Map field '" + p.javaName() + "': only Map<String, V> is supported.", null);
+                        "Map field '" + p.javaName() + "': only Map<String, V> is supported.", null);
                 return;
             }
 
-            ClassName linkedHashMap = ClassName.get("java.util", "LinkedHashMap");
+            ClassName concreteCursor = ClassName.get("io.github.flameyossnowy.uniform.json.parser.lowlevel", "JsonCursor");
+            ClassName linkedHashMap  = ClassName.get("java.util", "LinkedHashMap");
             TypeName  mapType = ParameterizedTypeName.get(ClassName.get("java.util", "Map"),
-                keyType, valType.box());
+                    keyType, valType.box());
 
-            // Maps need a sub-cursor because the key/value iteration model is different
-            // (nextField gives us a key as bytes, not an element). Keep sub-cursor here.
-            ClassName concreteCursorForMap = ClassName.get("io.github.flameyossnowy.uniform.json.parser.lowlevel", "JsonCursor");
-            cb.addStatement("$T __mapCur = ($T) $L.fieldValueCursor()", concreteCursorForMap, concreteCursorForMap, cursorExpr);
-            cb.addStatement("if (!__mapCur.enterObject()) $L = null", var);
+            // Use enterObjectValue() in-place instead of spawning a sub-cursor.
+            // This avoids: (1) the JsonCursor allocation, (2) the skipValueEnd pre-scan
+            // that fieldValueCursor() was forced to do to compute the sub-cursor limit.
+            cb.addStatement("if (!$L.enterObjectValue()) $L = null", cursorExpr, var);
             cb.beginControlFlow("else");
             cb.addStatement("$T __map = new $T<>()", mapType, linkedHashMap);
-            cb.beginControlFlow("while (__mapCur.nextField())");
-            cb.addStatement("String __key = __mapCur.fieldNameAsString()");
-            emitMapValueRead(cb, valType, jsonMapper, jsonMapperRegistry);
+            cb.beginControlFlow("while ($L.nextField())", cursorExpr);
+            cb.addStatement("String __key = $L.fieldNameAsString()", cursorExpr);
+            emitMapValueRead(cb, valType, jsonMapper, jsonMapperRegistry, cursorExpr);
             cb.endControlFlow();
+            cb.addStatement("$L.finishFieldAfterValue()", cursorExpr);
             cb.addStatement("$L = __map", var);
             cb.endControlFlow();
             return;
         }
 
-        // fieldValueParseInt() = scan from fieldValueStart, parse digits, advance pos, consume comma.
-        if (t.equals(TypeName.INT)     || t.equals(TypeName.INT.box()))     { cb.addStatement("$L = $L.fieldValueParseInt()",     var, cursorExpr); return; }
-        if (t.equals(TypeName.LONG)    || t.equals(TypeName.LONG.box()))    { cb.addStatement("$L = $L.fieldValueParseLong()",    var, cursorExpr); return; }
-        if (t.equals(TypeName.DOUBLE)  || t.equals(TypeName.DOUBLE.box()))  { cb.addStatement("$L = $L.fieldValueParseDouble()",  var, cursorExpr); return; }
-        if (t.equals(TypeName.FLOAT)   || t.equals(TypeName.FLOAT.box()))   { cb.addStatement("$L = $L.fieldValueParseFloat()",   var, cursorExpr); return; }
-        if (t.equals(TypeName.SHORT)   || t.equals(TypeName.SHORT.box()))   { cb.addStatement("$L = (short) $L.fieldValueParseInt()",  var, cursorExpr); return; }
-        if (t.equals(TypeName.BYTE)    || t.equals(TypeName.BYTE.box()))    { cb.addStatement("$L = (byte) $L.fieldValueParseInt()",   var, cursorExpr); return; }
-        if (t.equals(TypeName.BOOLEAN) || t.equals(TypeName.BOOLEAN.box())) { cb.addStatement("$L = $L.fieldValueParseBoolean()", var, cursorExpr); return; }
+        // Inline primitive / string parse - no allocation
+        if (t.equals(TypeName.INT)     || t.equals(TypeName.INT.box()))     { cb.addStatement("$L = $L.fieldValueAsInt()",     var, cursorExpr); return; }
+        if (t.equals(TypeName.LONG)    || t.equals(TypeName.LONG.box()))    { cb.addStatement("$L = $L.fieldValueAsLong()",    var, cursorExpr); return; }
+        if (t.equals(TypeName.DOUBLE)  || t.equals(TypeName.DOUBLE.box()))  { cb.addStatement("$L = $L.fieldValueAsDouble()",  var, cursorExpr); return; }
+        if (t.equals(TypeName.FLOAT)   || t.equals(TypeName.FLOAT.box()))   { cb.addStatement("$L = $L.fieldValueAsFloat()",   var, cursorExpr); return; }
+        if (t.equals(TypeName.SHORT)   || t.equals(TypeName.SHORT.box()))   { cb.addStatement("$L = (short) $L.fieldValueAsInt()",  var, cursorExpr); return; }
+        if (t.equals(TypeName.BYTE)    || t.equals(TypeName.BYTE.box()))    { cb.addStatement("$L = (byte) $L.fieldValueAsInt()",   var, cursorExpr); return; }
+        if (t.equals(TypeName.BOOLEAN) || t.equals(TypeName.BOOLEAN.box())) { cb.addStatement("$L = $L.fieldValueAsBoolean()", var, cursorExpr); return; }
 
         if (t.equals(ClassName.get(String.class))) {
             cb.addStatement("$L = $L.fieldValueParseString()", var, cursorExpr);
@@ -840,35 +840,29 @@ public final class UniformJsonProcessor extends AbstractProcessor {
             return;
         }
 
-        // Foreign mapper calls enterObject() itself, so we must hand off a cursor
-        // pointing to the start of the value region. fieldValueCursor() does this.
         if (p.abstractOrInterface()) {
             cb.addStatement("$T __subCursor = $L.fieldValueCursor()", jsonCursor, cursorExpr);
             cb.addStatement("$T __ctx = new $T($T.class, $T.class, $S, null)",
-                simpleCtx, simpleCtx, t.box(), ownerType, p.jsonName());
+                    simpleCtx, simpleCtx, t.box(), ownerType, p.jsonName());
             if (p.resolverFqcn() != null) {
                 cb.addStatement("$T __resolver = new $L()", ParameterizedTypeName.get(typeResolver, t.box()), p.resolverFqcn());
                 cb.addStatement("Class<?> __impl = __resolver.resolve(__ctx)");
             } else {
                 cb.addStatement("$T __supplier = $T.getSupplier($T.class)",
-                    ParameterizedTypeName.get(dynamicSupplier, t.box()), resolverRegistry, t.box());
+                        ParameterizedTypeName.get(dynamicSupplier, t.box()), resolverRegistry, t.box());
                 cb.addStatement("if (__supplier == null) throw new IllegalStateException(\"No context-dynamic supplier for \" + $T.class)", t.box());
                 cb.addStatement("Class<?> __impl = __supplier.supply(__ctx)");
             }
             cb.addStatement("$T __mapper = ($T) $T.getReader(__impl)",
-                ParameterizedTypeName.get(jsonMapper, ClassName.get(Object.class)),
-                ParameterizedTypeName.get(jsonMapper, ClassName.get(Object.class)),
-                jsonMapperRegistry);
+                    ParameterizedTypeName.get(jsonMapper, ClassName.get(Object.class)),
+                    ParameterizedTypeName.get(jsonMapper, ClassName.get(Object.class)),
+                    jsonMapperRegistry);
             cb.addStatement("if (__mapper == null) throw new IllegalStateException(\"No mapper for resolved type \" + __impl)");
             cb.addStatement("$L = ($T) __mapper.map(__subCursor)", var, t.box());
             return;
         }
 
-        // enterObjectValue() moves pos to fieldValueStart and enters the '{' in-place,
-        // so no JsonCursor allocation is needed. We then call the generated reader's
-        // readFields(cursor) directly, which skips the enterObject() step that map()
-        // would redundantly call.
-        // finishFieldAfterValue() consumes the trailing comma afterwards.
+        // Concrete nested object: enterObjectValue() in-place, no sub-cursor
         if (p.typeMirror().getKind() == TypeKind.DECLARED) {
             ClassName concreteCursor = ClassName.get("io.github.flameyossnowy.uniform.json.parser.lowlevel", "JsonCursor");
             if (t instanceof ClassName declared) {
@@ -877,16 +871,16 @@ public final class UniformJsonProcessor extends AbstractProcessor {
                 cb.addStatement("$L = null", var);
                 cb.nextControlFlow("else");
                 cb.addStatement("$L = (($T) $T.INSTANCE).readFields(($T) $L)",
-                    var, directReader, directReader,
-                    concreteCursor, cursorExpr);
+                        var, directReader, directReader,
+                        concreteCursor, cursorExpr);
                 cb.addStatement("$L.finishFieldAfterValue()", cursorExpr);
                 cb.endControlFlow();
             } else {
                 cb.addStatement("$T __subCursor = $L.fieldValueCursor()", jsonCursor, cursorExpr);
                 cb.addStatement("$T __mapper = ($T) $T.getReader($T.class)",
-                    ParameterizedTypeName.get(jsonMapper, t),
-                    ParameterizedTypeName.get(jsonMapper, t),
-                    jsonMapperRegistry, t);
+                        ParameterizedTypeName.get(jsonMapper, t),
+                        ParameterizedTypeName.get(jsonMapper, t),
+                        jsonMapperRegistry, t);
                 cb.addStatement("if (__mapper == null) throw new IllegalStateException(\"No mapper for \" + $T.class)", t);
                 cb.addStatement("$L = __mapper.map(__subCursor)", var);
             }
@@ -912,71 +906,69 @@ public final class UniformJsonProcessor extends AbstractProcessor {
             String jvVar = "__jv_elem";
             cb.addStatement("$T $L = $L.elementValueAsJsonValue()", JSON_VALUE, jvVar, arrCursorExpr);
             cb.addStatement("$L.add(($T) $T.INSTANCE.resolve($T.class).deserialize($L))",
-                collVar, elemType.box(), CORE_REGISTRY, elemType.box(), jvVar);
+                    collVar, elemType.box(), CORE_REGISTRY, elemType.box(), jvVar);
             return;
         }
 
         ClassName jsonCursor = ClassName.get("io.github.flameyossnowy.uniform.json.parser", "JsonReadCursor");
         ClassName concreteCursor = ClassName.get("io.github.flameyossnowy.uniform.json.parser.lowlevel", "JsonCursor");
         if (elemType instanceof ClassName declared) {
-            // enterObjectElement() advances pos past '{' in-place for the current element.
-            // readFields() then reads the nested object without allocating a sub-cursor.
             ClassName directReader = readerNameFor(declared);
             cb.beginControlFlow("if ($L.enterObjectElement())", arrCursorExpr);
             cb.addStatement("$L.add((($T) $T.INSTANCE).readFields(($T) $L))",
-                collVar, directReader, directReader,
-                concreteCursor, arrCursorExpr);
+                    collVar, directReader, directReader,
+                    concreteCursor, arrCursorExpr);
             cb.addStatement("$L.finishElementAfterValue()", arrCursorExpr);
             cb.nextControlFlow("else");
             cb.addStatement("$L.add(null)", collVar);
             cb.endControlFlow();
         } else {
             cb.addStatement("$T __em = ($T) $T.getReader($T.class)",
-                ParameterizedTypeName.get(jsonMapper, elemType),
-                ParameterizedTypeName.get(jsonMapper, elemType),
-                jsonMapperRegistry, elemType);
+                    ParameterizedTypeName.get(jsonMapper, elemType),
+                    ParameterizedTypeName.get(jsonMapper, elemType),
+                    jsonMapperRegistry, elemType);
             cb.addStatement("if (__em == null) throw new IllegalStateException(\"No mapper for \" + $T.class)", elemType);
             cb.addStatement("$L.add(($T) __em.map($L.elementValueCursor()))", collVar, elemType.box(), arrCursorExpr);
         }
     }
 
     private void emitMapValueRead(CodeBlock.Builder cb, TypeName valType,
-                                  ClassName jsonMapper, ClassName jsonMapperRegistry) {
-        // Map values: use fieldValueParseXxx() on the __mapCur sub-cursor
-        if (valType.equals(TypeName.INT)     || valType.equals(TypeName.INT.box()))     { cb.addStatement("__map.put(__key, __mapCur.fieldValueParseInt())");     return; }
-        if (valType.equals(TypeName.LONG)    || valType.equals(TypeName.LONG.box()))    { cb.addStatement("__map.put(__key, __mapCur.fieldValueParseLong())");    return; }
-        if (valType.equals(TypeName.DOUBLE)  || valType.equals(TypeName.DOUBLE.box()))  { cb.addStatement("__map.put(__key, __mapCur.fieldValueParseDouble())");  return; }
-        if (valType.equals(TypeName.FLOAT)   || valType.equals(TypeName.FLOAT.box()))   { cb.addStatement("__map.put(__key, __mapCur.fieldValueParseFloat())");   return; }
-        if (valType.equals(TypeName.SHORT)   || valType.equals(TypeName.SHORT.box()))   { cb.addStatement("__map.put(__key, (short) __mapCur.fieldValueParseInt())");  return; }
-        if (valType.equals(TypeName.BYTE)    || valType.equals(TypeName.BYTE.box()))    { cb.addStatement("__map.put(__key, (byte) __mapCur.fieldValueParseInt())");   return; }
-        if (valType.equals(TypeName.BOOLEAN) || valType.equals(TypeName.BOOLEAN.box())) { cb.addStatement("__map.put(__key, __mapCur.fieldValueParseBoolean())"); return; }
-        if (valType.equals(ClassName.get(String.class)))                                { cb.addStatement("__map.put(__key, __mapCur.fieldValueParseString())");  return; }
+                                  ClassName jsonMapper, ClassName jsonMapperRegistry,
+                                  String cursorExpr) {
+        if (valType.equals(TypeName.INT)     || valType.equals(TypeName.INT.box()))     { cb.addStatement("__map.put(__key, $L.fieldValueAsInt())",     cursorExpr); return; }
+        if (valType.equals(TypeName.LONG)    || valType.equals(TypeName.LONG.box()))    { cb.addStatement("__map.put(__key, $L.fieldValueAsLong())",    cursorExpr); return; }
+        if (valType.equals(TypeName.DOUBLE)  || valType.equals(TypeName.DOUBLE.box()))  { cb.addStatement("__map.put(__key, $L.fieldValueAsDouble())",  cursorExpr); return; }
+        if (valType.equals(TypeName.FLOAT)   || valType.equals(TypeName.FLOAT.box()))   { cb.addStatement("__map.put(__key, $L.fieldValueAsFloat())",   cursorExpr); return; }
+        if (valType.equals(TypeName.SHORT)   || valType.equals(TypeName.SHORT.box()))   { cb.addStatement("__map.put(__key, (short) $L.fieldValueAsInt())",  cursorExpr); return; }
+        if (valType.equals(TypeName.BYTE)    || valType.equals(TypeName.BYTE.box()))    { cb.addStatement("__map.put(__key, (byte) $L.fieldValueAsInt())",   cursorExpr); return; }
+        if (valType.equals(TypeName.BOOLEAN) || valType.equals(TypeName.BOOLEAN.box())) { cb.addStatement("__map.put(__key, $L.fieldValueAsBoolean())", cursorExpr); return; }
+        if (valType.equals(ClassName.get(String.class)))                                { cb.addStatement("__map.put(__key, $L.fieldValueParseString())",  cursorExpr); return; }
 
         if (isCoreResolved(valType)) {
-            cb.addStatement("$T __jv_mv = __mapCur.fieldValueAsJsonValue()", JSON_VALUE);
+            cb.addStatement("$T __jv_mv = $L.fieldValueAsJsonValue()", JSON_VALUE, cursorExpr);
             cb.addStatement("__map.put(__key, ($T) $T.INSTANCE.resolve($T.class).deserialize(__jv_mv))",
-                valType.box(), CORE_REGISTRY, valType.box());
+                    valType.box(), CORE_REGISTRY, valType.box());
             return;
         }
 
-        ClassName jsonCursor = ClassName.get("io.github.flameyossnowy.uniform.json.parser", "JsonReadCursor");
         ClassName concreteCursor = ClassName.get("io.github.flameyossnowy.uniform.json.parser.lowlevel", "JsonCursor");
         if (valType instanceof ClassName declared) {
             ClassName directReader = readerNameFor(declared);
-            cb.beginControlFlow("if (!__mapCur.enterObjectValue())");
+            // enterObjectValue() is in-place on the map cursor - no sub-cursor needed
+            cb.beginControlFlow("if (!$L.enterObjectValue())", cursorExpr);
             cb.addStatement("__map.put(__key, null)");
             cb.nextControlFlow("else");
-            cb.addStatement("__map.put(__key, (($T) $T.INSTANCE).readFields(($T) __mapCur))",
-                directReader, directReader, concreteCursor);
-            cb.addStatement("__mapCur.finishFieldAfterValue()");
+            cb.addStatement("__map.put(__key, (($T) $T.INSTANCE).readFields(($T) $L))",
+                    directReader, directReader, concreteCursor, cursorExpr);
+            cb.addStatement("$L.finishFieldAfterValue()", cursorExpr);
             cb.endControlFlow();
         } else {
             cb.addStatement("$T __vm = ($T) $T.getReader($T.class)",
-                ParameterizedTypeName.get(jsonMapper, valType),
-                ParameterizedTypeName.get(jsonMapper, valType),
-                jsonMapperRegistry, valType);
+                    ParameterizedTypeName.get(jsonMapper, valType),
+                    ParameterizedTypeName.get(jsonMapper, valType),
+                    jsonMapperRegistry, valType);
             cb.addStatement("if (__vm == null) throw new IllegalStateException(\"No mapper for \" + $T.class)", valType);
-            cb.addStatement("__map.put(__key, ($T) __vm.map(__mapCur.fieldValueCursor()))", valType.box());
+            cb.addStatement("__map.put(__key, ($T) __vm.map($L.fieldValueCursor()))", valType.box(), cursorExpr);
         }
     }
 
@@ -987,77 +979,77 @@ public final class UniformJsonProcessor extends AbstractProcessor {
         ClassName jsonConfig       = ClassName.get("io.github.flameyossnowy.uniform.json", "JsonConfig");
 
         TypeSpec.Builder classBuilder = TypeSpec.classBuilder(writerName)
-            .addAnnotation(AnnotationSpec.builder(Generated.class)
-                .addMember("value", "\"io.github.flameyossnowy.uniform.processor.UniformJsonProcessor\"")
-                .build())
-            .addModifiers(Modifier.PUBLIC, Modifier.FINAL)
-            .addSuperinterface(ParameterizedTypeName.get(jsonWriterMapper, target))
-            .addField(FieldSpec.builder(jsonConfig, "__config",
-                Modifier.PRIVATE, Modifier.STATIC, Modifier.VOLATILE).build())
-            .addMethod(MethodSpec.methodBuilder("setConfig")
-                .addModifiers(Modifier.PUBLIC, Modifier.STATIC)
-                .addParameter(jsonConfig, "cfg")
-                .addStatement("__config = cfg")
-                .build())
-            .addField(ParameterizedTypeName.get(jsonWriterMapper, target), "INSTANCE",
-                Modifier.PUBLIC, Modifier.STATIC, Modifier.FINAL)
-            .addStaticBlock(CodeBlock.builder()
-                .addStatement("INSTANCE = new $T()", writerName)
-                .build())
-            .addMethod(MethodSpec.constructorBuilder().addModifiers(Modifier.PRIVATE).build())
-            .addMethod(MethodSpec.methodBuilder("stripQuotes")
-                .addModifiers(Modifier.PRIVATE, Modifier.STATIC)
-                .returns(String.class)
-                .addParameter(String.class, "s")
-                .addStatement("if (s == null) return null")
-                .addStatement("int len = s.length()")
-                .addStatement("if (len >= 2 && s.charAt(0) == '\"' && s.charAt(len - 1) == '\"') return s.substring(1, len - 1)")
-                .addStatement("return s")
-                .build());
+                .addAnnotation(AnnotationSpec.builder(Generated.class)
+                        .addMember("value", "\"io.github.flameyossnowy.uniform.processor.UniformJsonProcessor\"")
+                        .build())
+                .addModifiers(Modifier.PUBLIC, Modifier.FINAL)
+                .addSuperinterface(ParameterizedTypeName.get(jsonWriterMapper, target))
+                .addField(FieldSpec.builder(jsonConfig, "__config",
+                        Modifier.PRIVATE, Modifier.STATIC, Modifier.VOLATILE).build())
+                .addMethod(MethodSpec.methodBuilder("setConfig")
+                        .addModifiers(Modifier.PUBLIC, Modifier.STATIC)
+                        .addParameter(jsonConfig, "cfg")
+                        .addStatement("__config = cfg")
+                        .build())
+                .addField(ParameterizedTypeName.get(jsonWriterMapper, target), "INSTANCE",
+                        Modifier.PUBLIC, Modifier.STATIC, Modifier.FINAL)
+                .addStaticBlock(CodeBlock.builder()
+                        .addStatement("INSTANCE = new $T()", writerName)
+                        .build())
+                .addMethod(MethodSpec.constructorBuilder().addModifiers(Modifier.PRIVATE).build())
+                .addMethod(MethodSpec.methodBuilder("stripQuotes")
+                        .addModifiers(Modifier.PRIVATE, Modifier.STATIC)
+                        .returns(String.class)
+                        .addParameter(String.class, "s")
+                        .addStatement("if (s == null) return null")
+                        .addStatement("int len = s.length()")
+                        .addStatement("if (len >= 2 && s.charAt(0) == '\"' && s.charAt(len - 1) == '\"') return s.substring(1, len - 1)")
+                        .addStatement("return s")
+                        .build());
 
         addFieldNameConstantsTo(classBuilder, props);
         addCommonFieldBytes(classBuilder);
 
         MethodSpec writeTo = MethodSpec.methodBuilder("writeTo")
-            .addAnnotation(Override.class)
-            .addModifiers(Modifier.PUBLIC)
-            .returns(TypeName.VOID)
-            .addParameter(jsonStringWriter, "out")
-            .addParameter(target, "value")
-            .addStatement("if (value == null) { out.nullValue(); return; }")
-            .addStatement("out.beginObject()")
-            .addCode(buildWriterBody(props))
-            .addStatement("out.endObject()")
-            .build();
+                .addAnnotation(Override.class)
+                .addModifiers(Modifier.PUBLIC)
+                .returns(TypeName.VOID)
+                .addParameter(jsonStringWriter, "out")
+                .addParameter(target, "value")
+                .addStatement("if (value == null) { out.nullValue(); return; }")
+                .addStatement("out.beginObject()")
+                .addCode(buildWriterBody(props))
+                .addStatement("out.endObject()")
+                .build();
 
         classBuilder.addMethod(writeTo);
 
         JavaFile.builder(writerName.packageName(), classBuilder.build())
-            .build().writeTo(processingEnv.getFiler());
+                .build().writeTo(processingEnv.getFiler());
     }
 
     private void addFieldNameConstantsTo(TypeSpec.Builder classBuilder, List<Property> props) {
         for (Property p : props) {
             if (!isAsciiNoEscape(p.jsonName())) continue;
             classBuilder.addField(
-                FieldSpec.builder(byte[].class, fieldConstantName(p.jsonName()),
-                        Modifier.PRIVATE, Modifier.STATIC, Modifier.FINAL)
-                    .initializer(fieldFragmentInitializer(p.jsonName()))
-                    .build()
+                    FieldSpec.builder(byte[].class, fieldConstantName(p.jsonName()),
+                                    Modifier.PRIVATE, Modifier.STATIC, Modifier.FINAL)
+                            .initializer(fieldFragmentInitializer(p.jsonName()))
+                            .build()
             );
         }
     }
 
     private void addCommonFieldBytes(TypeSpec.Builder classBuilder) {
         classBuilder.addField(FieldSpec.builder(byte[].class, FIELD_TRUE,
-                Modifier.PRIVATE, Modifier.STATIC, Modifier.FINAL)
-            .initializer("{(byte)'t',(byte)'r',(byte)'u',(byte)'e'}").build());
+                        Modifier.PRIVATE, Modifier.STATIC, Modifier.FINAL)
+                .initializer("{(byte)'t',(byte)'r',(byte)'u',(byte)'e'}").build());
         classBuilder.addField(FieldSpec.builder(byte[].class, FIELD_FALSE,
-                Modifier.PRIVATE, Modifier.STATIC, Modifier.FINAL)
-            .initializer("{(byte)'f',(byte)'a',(byte)'l',(byte)'s',(byte)'e'}").build());
+                        Modifier.PRIVATE, Modifier.STATIC, Modifier.FINAL)
+                .initializer("{(byte)'f',(byte)'a',(byte)'l',(byte)'s',(byte)'e'}").build());
         classBuilder.addField(FieldSpec.builder(byte[].class, FIELD_NULL,
-                Modifier.PRIVATE, Modifier.STATIC, Modifier.FINAL)
-            .initializer("{(byte)'n',(byte)'u',(byte)'l',(byte)'l'}").build());
+                        Modifier.PRIVATE, Modifier.STATIC, Modifier.FINAL)
+                .initializer("{(byte)'n',(byte)'u',(byte)'l',(byte)'l'}").build());
     }
 
     private CodeBlock buildWriterBody(List<Property> props) {
@@ -1075,7 +1067,7 @@ public final class UniformJsonProcessor extends AbstractProcessor {
                 case SETTER -> {
                     if (p.readAccessor() != null) yield "value." + p.readAccessor() + "()";
                     processingEnv.getMessager().printMessage(Diagnostic.Kind.WARNING,
-                        "Property '" + p.javaName() + "' is setter-only and will be omitted from serialization.", null);
+                            "Property '" + p.javaName() + "' is setter-only and will be omitted from serialization.", null);
                     yield null;
                 }
             };
@@ -1095,8 +1087,8 @@ public final class UniformJsonProcessor extends AbstractProcessor {
             CollectionKind ck = collectionKind(p.typeMirror());
 
             if (t.equals(TypeName.INT) || t.equals(TypeName.INT.box())
-                || t.equals(TypeName.SHORT) || t.equals(TypeName.SHORT.box())
-                || t.equals(TypeName.BYTE)  || t.equals(TypeName.BYTE.box())) {
+                    || t.equals(TypeName.SHORT) || t.equals(TypeName.SHORT.box())
+                    || t.equals(TypeName.BYTE)  || t.equals(TypeName.BYTE.box())) {
                 cb.addStatement("out.writeInt($L)", access);
             } else if (t.equals(TypeName.LONG) || t.equals(TypeName.LONG.box())) {
                 cb.addStatement("out.writeLong($L)", access);
@@ -1133,20 +1125,20 @@ public final class UniformJsonProcessor extends AbstractProcessor {
                 cb.nextControlFlow("else");
                 if (p.abstractOrInterface()) {
                     cb.addStatement("$T __w = ($T) $T.getWriter($L.getClass())",
-                        ParameterizedTypeName.get(jsonWriterMapper, ClassName.get(Object.class)),
-                        ParameterizedTypeName.get(jsonWriterMapper, ClassName.get(Object.class)),
-                        jsonMapperRegistry, access);
+                            ParameterizedTypeName.get(jsonWriterMapper, ClassName.get(Object.class)),
+                            ParameterizedTypeName.get(jsonWriterMapper, ClassName.get(Object.class)),
+                            jsonMapperRegistry, access);
                     cb.addStatement("if (__w == null) throw new IllegalStateException(\"No writer for runtime type \" + $L.getClass())", access);
                     cb.addStatement("__w.writeTo(out, $L)", access);
                 } else if (t instanceof ClassName declared) {
                     ClassName directWriter = writerNameFor(declared);
                     cb.addStatement("(($T) $T.INSTANCE).writeTo(out, $L)",
-                        ParameterizedTypeName.get(jsonWriterMapper, t), directWriter, access);
+                            ParameterizedTypeName.get(jsonWriterMapper, t), directWriter, access);
                 } else {
                     cb.addStatement("$T __w = ($T) $T.getWriter($T.class)",
-                        ParameterizedTypeName.get(jsonWriterMapper, t),
-                        ParameterizedTypeName.get(jsonWriterMapper, t),
-                        jsonMapperRegistry, t);
+                            ParameterizedTypeName.get(jsonWriterMapper, t),
+                            ParameterizedTypeName.get(jsonWriterMapper, t),
+                            jsonMapperRegistry, t);
                     cb.addStatement("if (__w == null) throw new IllegalStateException(\"No writer for \" + $T.class)", t);
                     cb.addStatement("__w.writeTo(out, $L)", access);
                 }
@@ -1167,8 +1159,8 @@ public final class UniformJsonProcessor extends AbstractProcessor {
         String nullValueMethod = inArray ? "arrayNullValue" : "nullValue";
 
         if (elemType.equals(TypeName.INT)    || elemType.equals(TypeName.INT.box())
-            || elemType.equals(TypeName.SHORT) || elemType.equals(TypeName.SHORT.box())
-            || elemType.equals(TypeName.BYTE)  || elemType.equals(TypeName.BYTE.box())) {
+                || elemType.equals(TypeName.SHORT) || elemType.equals(TypeName.SHORT.box())
+                || elemType.equals(TypeName.BYTE)  || elemType.equals(TypeName.BYTE.box())) {
             cb.beginControlFlow("if ($L == null)", elemExpr);
             cb.addStatement("out.$L()", nullValueMethod);
             cb.nextControlFlow("else");
@@ -1209,12 +1201,12 @@ public final class UniformJsonProcessor extends AbstractProcessor {
         } else if (elemType instanceof ClassName declared) {
             ClassName directWriter = writerNameFor(declared);
             cb.addStatement("(($T) $T.INSTANCE).writeTo(out, $L)",
-                ParameterizedTypeName.get(jsonWriterMapper, elemType), directWriter, elemExpr);
+                    ParameterizedTypeName.get(jsonWriterMapper, elemType), directWriter, elemExpr);
         } else {
             cb.addStatement("$T __ew = ($T) $T.getWriter($L.getClass())",
-                ParameterizedTypeName.get(jsonWriterMapper, ClassName.get(Object.class)),
-                ParameterizedTypeName.get(jsonWriterMapper, ClassName.get(Object.class)),
-                jsonMapperRegistry, elemExpr);
+                    ParameterizedTypeName.get(jsonWriterMapper, ClassName.get(Object.class)),
+                    ParameterizedTypeName.get(jsonWriterMapper, ClassName.get(Object.class)),
+                    jsonMapperRegistry, elemExpr);
             cb.addStatement("if (__ew == null) throw new IllegalStateException(\"No writer for element\")");
             cb.addStatement("__ew.writeTo(out, $L)", elemExpr);
         }
@@ -1287,33 +1279,33 @@ public final class UniformJsonProcessor extends AbstractProcessor {
         ClassName jsonConfig         = ClassName.get("io.github.flameyossnowy.uniform.json", "JsonConfig");
 
         MethodSpec register = MethodSpec.methodBuilder("register")
-            .addAnnotation(Override.class)
-            .addModifiers(Modifier.PUBLIC)
-            .addParameter(jsonMapperRegistry, "registry")
-            .addStatement("registry.registerReaderInstance($T.class, $T.INSTANCE)", target, readerName)
-            .addStatement("registry.registerWriterInstance($T.class, $T.INSTANCE)", target, writerName)
-            .build();
+                .addAnnotation(Override.class)
+                .addModifiers(Modifier.PUBLIC)
+                .addParameter(jsonMapperRegistry, "registry")
+                .addStatement("registry.registerReaderInstance($T.class, $T.INSTANCE)", target, readerName)
+                .addStatement("registry.registerWriterInstance($T.class, $T.INSTANCE)", target, writerName)
+                .build();
 
         MethodSpec registerWithConfig = MethodSpec.methodBuilder("register")
-            .addAnnotation(Override.class)
-            .addModifiers(Modifier.PUBLIC)
-            .addParameter(jsonMapperRegistry, "registry")
-            .addParameter(jsonConfig, "config")
-            .addStatement("$T.setConfig(config)", readerName)
-            .addStatement("$T.setConfig(config)", writerName)
-            .addStatement("registry.registerReaderInstance($T.class, $T.INSTANCE)", target, readerName)
-            .addStatement("registry.registerWriterInstance($T.class, $T.INSTANCE)", target, writerName)
-            .build();
+                .addAnnotation(Override.class)
+                .addModifiers(Modifier.PUBLIC)
+                .addParameter(jsonMapperRegistry, "registry")
+                .addParameter(jsonConfig, "config")
+                .addStatement("$T.setConfig(config)", readerName)
+                .addStatement("$T.setConfig(config)", writerName)
+                .addStatement("registry.registerReaderInstance($T.class, $T.INSTANCE)", target, readerName)
+                .addStatement("registry.registerWriterInstance($T.class, $T.INSTANCE)", target, writerName)
+                .build();
 
         TypeSpec module = TypeSpec.classBuilder(moduleName)
-            .addAnnotation(AnnotationSpec.builder(Generated.class)
-                .addMember("value", "\"io.github.flameyossnowy.uniform.processor.UniformJsonProcessor\"")
-                .build())
-            .addModifiers(Modifier.PUBLIC, Modifier.FINAL)
-            .addSuperinterface(jsonMapperModule)
-            .addMethod(register)
-            .addMethod(registerWithConfig)
-            .build();
+                .addAnnotation(AnnotationSpec.builder(Generated.class)
+                        .addMember("value", "\"io.github.flameyossnowy.uniform.processor.UniformJsonProcessor\"")
+                        .build())
+                .addModifiers(Modifier.PUBLIC, Modifier.FINAL)
+                .addSuperinterface(jsonMapperModule)
+                .addMethod(register)
+                .addMethod(registerWithConfig)
+                .build();
 
         JavaFile.builder(moduleName.packageName(), module).build().writeTo(processingEnv.getFiler());
     }
@@ -1324,33 +1316,33 @@ public final class UniformJsonProcessor extends AbstractProcessor {
 
         String requestedName = processingEnv.getOptions().get("uniform.generatedModule");
         String moduleSimpleName = (requestedName == null || requestedName.isBlank())
-            ? "UniformGeneratedJsonModule" : requestedName.trim();
+                ? "UniformGeneratedJsonModule" : requestedName.trim();
         ClassName aggregatorName = ClassName.get("io.github.flameyossnowy.uniform.generated", moduleSimpleName);
 
         MethodSpec.Builder register = MethodSpec.methodBuilder("register")
-            .addAnnotation(Override.class)
-            .addModifiers(Modifier.PUBLIC)
-            .addParameter(registryType, "registry");
+                .addAnnotation(Override.class)
+                .addModifiers(Modifier.PUBLIC)
+                .addParameter(registryType, "registry");
         for (ClassName module : modules) {
             register.addStatement("new $T().register(registry)", module);
         }
 
         TypeSpec aggregator = TypeSpec.classBuilder(aggregatorName)
-            .addAnnotation(AnnotationSpec.builder(Generated.class)
-                .addMember("value", "\"io.github.flameyossnowy.uniform.processor.UniformJsonProcessor\"")
-                .build())
-            .addModifiers(Modifier.PUBLIC, Modifier.FINAL)
-            .addSuperinterface(moduleInterface)
-            .addMethod(register.build())
-            .build();
+                .addAnnotation(AnnotationSpec.builder(Generated.class)
+                        .addMember("value", "\"io.github.flameyossnowy.uniform.processor.UniformJsonProcessor\"")
+                        .build())
+                .addModifiers(Modifier.PUBLIC, Modifier.FINAL)
+                .addSuperinterface(moduleInterface)
+                .addMethod(register.build())
+                .build();
 
         JavaFile.builder(aggregatorName.packageName(), aggregator).build().writeTo(processingEnv.getFiler());
 
         String servicesFile = "META-INF/services/io.github.flameyossnowy.uniform.json.mappers.JsonMapperModule";
         try {
             try (var out = processingEnv.getFiler()
-                .createResource(javax.tools.StandardLocation.CLASS_OUTPUT, "", servicesFile)
-                .openWriter()) {
+                    .createResource(javax.tools.StandardLocation.CLASS_OUTPUT, "", servicesFile)
+                    .openWriter()) {
                 out.write(aggregatorName.canonicalName());
                 out.write("\n");
             }
@@ -1403,7 +1395,7 @@ public final class UniformJsonProcessor extends AbstractProcessor {
             if (params.size() != assignable.size()) continue;
             for (int i = 0; i < params.size(); i++) {
                 if (!typeUtils.isSameType(typeUtils.erasure(params.get(i).asType()),
-                    typeUtils.erasure(assignable.get(i).typeMirror()))) continue outer;
+                        typeUtils.erasure(assignable.get(i).typeMirror()))) continue outer;
             }
             return ctor;
         }

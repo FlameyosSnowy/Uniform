@@ -256,17 +256,17 @@ public class JsonAdapter {
      *
      * <p>Resolution order:
      * <ol>
-     *   <li>Consult {@link CoreTypeResolverRegistry#INSTANCE} — covers all primitives,
+     *   <li>Consult {@link CoreTypeResolverRegistry#INSTANCE} - covers all primitives,
      *       wrappers, {@link String}, {@link BigInteger}, {@link BigDecimal},
      *       {@link UUID}, {@link URI}/{@link URL},
      *       {@link Path}, all {@code java.time.*} types, and any
      *       custom {@link CoreTypeResolver} registered by the caller.</li>
      *   <li>Fall through to the mapper registry for {@code }-annotated
-     *       POJOs — {@code tree} must be a {@link JsonObject} in that case.</li>
+     *       POJOs - {@code tree} must be a {@link JsonObject} in that case.</li>
      * </ol>
      *
      * <p>For collections use {@link #treeToList}, {@link #treeToSet},
-     * {@link #treeToQueue}, or {@link #treeToMap} — generic element types are erased
+     * {@link #treeToQueue}, or {@link #treeToMap} - generic element types are erased
      * at runtime so they need their own overloads.
      *
      * @param tree the DOM node to convert
@@ -288,7 +288,7 @@ public class JsonAdapter {
         if (!(tree instanceof JsonObject obj))
             throw new IllegalStateException(
                 "Cannot map " + tree.getClass().getSimpleName() + " to " + type.getName()
-                    + " — expected a JsonObject. If this is a custom type, register a "
+                    + " - expected a JsonObject. If this is a custom type, register a "
                     + "CoreTypeResolver via CoreTypeResolverRegistry.INSTANCE.register(...).");
 
         JsonMapper<T> mapper = (JsonMapper<T>) JsonMapperRegistry.getReader(type);

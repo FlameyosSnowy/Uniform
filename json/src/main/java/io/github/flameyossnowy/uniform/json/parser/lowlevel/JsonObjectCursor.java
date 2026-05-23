@@ -14,19 +14,19 @@ import java.util.Map;
  *
  * <p>Mirrors {@link MapJsonCursor} exactly, but works directly with the typed
  * {@link JsonValue} DOM so no runtime {@code instanceof} chains or string
- * round-trips are needed for coercion — each leaf type is already the correct
+ * round-trips are needed for coercion; each leaf type is already the correct
  * Java representation.
  *
  * <h3>Supported value types</h3>
  * <ul>
- *   <li>{@link JsonString}  — string accessors return {@link JsonString#value()}</li>
- *   <li>{@link JsonNumber}  — numeric accessors delegate to the appropriate
+ *   <li>{@link JsonString}: string accessors return {@link JsonString#value()}</li>
+ *   <li>{@link JsonNumber}: numeric accessors delegate to the appropriate
  *       {@code byteValue()} / {@code intValue()} / … method</li>
- *   <li>{@link JsonBoolean} — boolean accessor returns {@link JsonBoolean#value()}</li>
- *   <li>{@link JsonNull}    — numeric accessors return {@code 0}, boolean returns
+ *   <li>{@link JsonBoolean}: boolean accessor returns {@link JsonBoolean#value()}</li>
+ *   <li>{@link JsonNull}: numeric accessors return {@code 0}, boolean returns
  *       {@code false}, string returns {@code ""}, sub-cursors return an empty cursor</li>
- *   <li>{@link JsonObject}  — navigated via {@link #enterObject()} on a sub-cursor</li>
- *   <li>{@link JsonArray}   — navigated via {@link #enterArray()} on a sub-cursor</li>
+ *   <li>{@link JsonObject}: navigated via {@link #enterObject()} on a sub-cursor</li>
+ *   <li>{@link JsonArray}: navigated via {@link #enterArray()} on a sub-cursor</li>
  * </ul>
  *
  * <h3>Thread safety</h3>
@@ -92,6 +92,21 @@ public final class JsonObjectCursor implements JsonReadCursor {
     }
 
     @Override
+    public boolean enterObjectValue() {
+        if (currentValue == null || !(currentValue instanceof JsonObject obj)) return false;
+        entryIterator = obj.getMutableMap().entrySet().iterator();
+        currentKey = null;
+        currentValue = null;
+        entered = true;
+        return true;
+    }
+
+    @Override
+    public void finishFieldAfterValue() {
+
+    }
+
+    @Override
     public boolean nextField() {
         if (!entered || entryIterator == null || !entryIterator.hasNext()) return false;
         Map.Entry<String, JsonValue> entry = entryIterator.next();
@@ -121,6 +136,11 @@ public final class JsonObjectCursor implements JsonReadCursor {
         if (!entered || elementIterator == null || !elementIterator.hasNext()) return false;
         currentElement = elementIterator.next();
         return true;
+    }
+
+    @Override
+    public @NotNull String fieldValueParseString() {
+        return toString(currentValue);
     }
 
     @Override
@@ -215,6 +235,15 @@ public final class JsonObjectCursor implements JsonReadCursor {
             case JsonBoolean b -> b.value() ? 1 : 0;
             case JsonString s -> Integer.parseInt(s.value());
             case null, default -> 0;
+        };
+    }
+
+    private static String toString(JsonValue v) {
+        return switch (v) {
+            case JsonNumber n -> n.toString();
+            case JsonBoolean b -> String.valueOf(b.value());
+            case JsonString s -> s.value();
+            case null, default -> "";
         };
     }
 
