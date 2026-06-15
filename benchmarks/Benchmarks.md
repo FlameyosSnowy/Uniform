@@ -13,7 +13,7 @@ Competitors:
 | **simdjson-java** | 0.3.0 | read only (parser, no write path) |
 
 > **Note:** [simdjson-java](https://github.com/simdjson/simdjson-java) is the official Java port of the simdjson C++ parser.  
-> It has no serialization API — write benchmarks are Uniform / Jackson / Gson only.
+> It has no serialization API, write benchmarks are Uniform / Jackson / Gson only.
 
 ---
 
@@ -41,7 +41,7 @@ Uniform leads on every payload size. At small payloads simdjson-java's SIMD tape
 | Complex (~64 B) | **5,111** | 2,971 | 1,286 |
 | Super Complex (~900 B) | **177.4** | 162.5 | 60.9 |
 
-The write story is Uniform's strongest result. **3.57× faster than Jackson** on simple payloads — driven by `ThreadLocal` `StringBuilder` reuse and a fast-path string escaping loop that avoids per-call stream allocation. The gap compresses at super-complex size as actual serialization work dominates over setup overhead.
+The write story is Uniform's strongest result. **3.57× faster than Jackson** on simple payloads - driven by `ThreadLocal` `StringBuilder` reuse and a fast-path string escaping loop that avoids per-call stream allocation. The gap compresses at super-complex size as actual serialization work dominates over setup overhead.
 
 ---
 
@@ -52,7 +52,7 @@ The write story is Uniform's strongest result. **3.57× faster than Jackson** on
 | Variant | Uniform | Jackson | Gson |
 |---|---|---|---|
 | Single indent (2 sp) | **1,027** | 338 | 227 |
-| Double indent (4 sp) | **552** | 343 | — |
+| Double indent (4 sp) | **552** | 343 | - |
 
 **~3× faster than Jackson** on pretty-printing, powered by a SIMD-precomputed quote mask that makes string boundary detection essentially free in `JsonStreamEngine`.
 

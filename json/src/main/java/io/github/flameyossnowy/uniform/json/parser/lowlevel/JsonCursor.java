@@ -375,15 +375,11 @@ public final class JsonCursor implements JsonReadCursor {
         }
 
         elementValueStart = pos;
-        elementValueLen   = -1; // lazy
+        elementValueLen   = -1;
 
         return true;
     }
 
-    /**
-     * Ensures fieldValueLen is populated. Called by legacy fieldValueAsXxx() methods.
-     * Callers must not mix inline-parse and legacy accessors for the same field.
-     */
     private void ensureValueLen() {
         if (fieldValueLen < 0) {
             fieldValueLen = findValueLength(fieldValueStart);
@@ -396,7 +392,6 @@ public final class JsonCursor implements JsonReadCursor {
         }
     }
 
-    /** Parse the current field value as an int in one pass. */
     public int fieldValueParseInt() {
         pos = fieldValueStart;
         final int v = scanParseInt();

@@ -13,7 +13,7 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * A JSON object ({@code { "key": value, … }}).
+ * A JSON object ({@code { "key": value, ... }}).
  *
  * <p>All typed {@code get*(String)} accessors throw {@link JsonTypeException} when the stored
  * value has the wrong type, and {@link JsonMissingKeyException} when the key is absent.
@@ -136,10 +136,6 @@ public final class JsonObject implements JsonValue, Iterable<Map.Entry<String, J
         if (v instanceof JsonArray a) return a;
         throw new JsonTypeException(key, "JsonArray", v);
     }
-
-    // -------------------------------------------------------------------------
-    // Query
-    // -------------------------------------------------------------------------
 
     public boolean contains(@NotNull String key) {
         return map.containsKey(key);

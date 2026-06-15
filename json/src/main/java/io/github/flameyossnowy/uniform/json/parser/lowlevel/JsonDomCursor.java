@@ -36,12 +36,9 @@ import static io.github.flameyossnowy.uniform.json.resolvers.CoreTypeResolverReg
  * <p>All {@code fieldValueAs*()} / {@code elementValueAs*()} methods delegate to
  * #coerceToX(JsonValue) helpers that handle the full
  * {@link JsonNumber} sealed hierarchy, {@link JsonString}, {@link JsonBoolean}, and
- * {@link JsonNull} - matching the tolerance of {@link JsonCursor}'s own converters.
+ * {@link JsonNull}, matching the tolerance of {@link JsonCursor}'s own converters.
  */
 public final class JsonDomCursor implements JsonReadCursor {
-    //private enum Mode { OBJECT, ARRAY, SCALAR }
-
-    /** The DOM node this cursor was constructed over. */
     private final JsonValue node;
 
     // Object-iteration state
@@ -82,7 +79,7 @@ public final class JsonDomCursor implements JsonReadCursor {
 
     @Override
     public void finishFieldAfterValue() {
-
+        // no-op
     }
 
     private Map.Entry<String, JsonValue> currentEntry;
@@ -151,10 +148,6 @@ public final class JsonDomCursor implements JsonReadCursor {
         return currentKey().equals(expected);
     }
 
-    // -------------------------------------------------------------------------
-    // Field value - raw + typed accessors
-    // -------------------------------------------------------------------------
-
     @Override
     public @NotNull ByteSlice fieldValue() {
         byte[] bytes = currentFieldValue().toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
@@ -174,10 +167,6 @@ public final class JsonDomCursor implements JsonReadCursor {
     public @NotNull JsonDomCursor fieldValueCursor() {
         return new JsonDomCursor(currentFieldValue());
     }
-
-    // -------------------------------------------------------------------------
-    // Array navigation
-    // -------------------------------------------------------------------------
 
     @Override
     public boolean enterArray() {

@@ -12,16 +12,11 @@ import java.util.Map;
  * A {@link JsonReadCursor} backed by an in-memory {@link JsonObject} (or any
  * {@code Map<String, JsonValue>}) rather than a raw JSON byte array.
  *
- * <p>Mirrors {@link MapJsonCursor} exactly, but works directly with the typed
- * {@link JsonValue} DOM so no runtime {@code instanceof} chains or string
- * round-trips are needed for coercion; each leaf type is already the correct
- * Java representation.
- *
  * <h3>Supported value types</h3>
  * <ul>
  *   <li>{@link JsonString}: string accessors return {@link JsonString#value()}</li>
  *   <li>{@link JsonNumber}: numeric accessors delegate to the appropriate
- *       {@code byteValue()} / {@code intValue()} / … method</li>
+ *       {@code byteValue()} / {@code intValue()} / ... method</li>
  *   <li>{@link JsonBoolean}: boolean accessor returns {@link JsonBoolean#value()}</li>
  *   <li>{@link JsonNull}: numeric accessors return {@code 0}, boolean returns
  *       {@code false}, string returns {@code ""}, sub-cursors return an empty cursor</li>

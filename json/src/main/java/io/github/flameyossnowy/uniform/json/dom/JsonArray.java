@@ -10,7 +10,7 @@ import java.util.List;
 import java.util.function.Consumer;
 
 /**
- * A JSON array ({@code [ value, … ]}).
+ * A JSON array ({@code [ value, ... ]}).
  *
  * <p>Typed {@code get*(int)} accessors throw {@link JsonTypeException} on a type mismatch and
  * {@link IndexOutOfBoundsException} when the index is out of range.

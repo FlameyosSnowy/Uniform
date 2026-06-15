@@ -127,13 +127,10 @@ public class MapJsonCursorTypeTest {
 
         @Test @DisplayName("Char stored as Character -> fieldValueAsUnquotedString() single char")
         void charPreserved() {
-            // char has no dedicated accessor - verify it round-trips through toString
-            // and that the stored box type is Character, not String or Integer
             MapJsonCursor c = cursorOf(Map.of("v", 'Z'));
             String result = c.fieldValueAsUnquotedString();
             assertEquals("Z", result);
             assertEquals(1, result.length());
-            // Also verify the JsonValue mapping preserves it as a single-char JsonString
             JsonValue jv = c.fieldValueAsJsonValue();
             assertEquals(JsonString.class, jv.getClass());
             assertEquals("Z", ((JsonString) jv).value());
@@ -480,10 +477,6 @@ public class MapJsonCursorTypeTest {
             assertFalse(sub.enterArray(),  "scalar cursor must not enter as array");
         }
     }
-
-    // =========================================================
-    // 6. JsonAdapter.readValue(Map, Class) integration
-    // =========================================================
 
     @Nested
     @DisplayName("JsonAdapter.readValue(Map, Class) integration")

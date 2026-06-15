@@ -2,11 +2,6 @@ package io.github.flameyossnowy.uniform.json.parser.lowlevel;
 
 import io.github.flameyossnowy.turboscanner.ScanResult;
 
-/**
- * Thread-local cache for JsonCursor parsing infrastructure.
- * Eliminates per-parse allocation of ScanResult long[] arrays
- * and the decode scratch buffer.
- */
 public final class JsonCursorCache {
     public static final int SIMD_THRESHOLD = 4096;
 

@@ -132,7 +132,6 @@ public class JsonCodegenSmokeTest {
         String formattedJson = new String(outputBytes, StandardCharsets.UTF_8);
         System.out.println(formattedJson);
         
-        // Print hex representation of last few bytes for debugging
         System.err.print("Last 10 bytes (hex): ");
         for (int i = Math.max(0, outputBytes.length - 10); i < outputBytes.length; i++) {
             System.err.printf("%02x ", outputBytes[i]);
@@ -176,16 +175,11 @@ public class JsonCodegenSmokeTest {
         assertEquals(11, ((Circle) value.shape).radius);
     }
 
-    // ============================================================================
-    // CORRUPTED / INVALID JSON TESTS
-    // ============================================================================
-
     @Test
-    @DisplayName("Malformed JSON handling - library may be lenient or strict")
+    @DisplayName("Malformed JSON handling")
     void malformed_json_handling() {
         JsonAdapter adapter = new JsonAdapter(config());
 
-        // Missing closing brace - library may throw or handle gracefully
         assertDoesNotThrow(() -> {
             try {
                 SimplePojo result = adapter.readValue("{\"id\":1,\"name\":\"a\"", SimplePojo.class);
@@ -195,7 +189,6 @@ public class JsonCodegenSmokeTest {
             }
         });
 
-        // Trailing garbage - library may parse valid prefix
         assertDoesNotThrow(() -> {
             try {
                 SimplePojo result = adapter.readValue("{\"id\":1,\"name\":\"a\"}garbage", SimplePojo.class);
@@ -212,13 +205,11 @@ public class JsonCodegenSmokeTest {
     void empty_json_handling() {
         JsonAdapter adapter = new JsonAdapter(config());
 
-        // Empty object
         SimplePojo empty = adapter.readValue("{}", SimplePojo.class);
         assertNotNull(empty);
         assertEquals(0, empty.id);
         assertNull(empty.name);
 
-        // Empty array in field
         JsonValue value = adapter.readValue("{\"id\":1,\"items\":[]}");
         assertNotNull(value);
     }
@@ -228,7 +219,6 @@ public class JsonCodegenSmokeTest {
     void wrong_data_types_in_json() {
         JsonAdapter adapter = new JsonAdapter(config());
 
-        // String where number expected - library may throw NumberFormatException or use default
         assertThrows(NumberFormatException.class, () -> {
             adapter.readValue("{\"id\":\"not_a_number\",\"name\":\"a\"}", SimplePojo.class);
         });
@@ -250,7 +240,6 @@ public class JsonCodegenSmokeTest {
     void truncated_json_detection() {
         JsonAdapter adapter = new JsonAdapter(config());
 
-        // Object truncated mid-value - library behavior varies
         assertDoesNotThrow(() -> {
             try {
                 SimplePojo result = adapter.readValue("{\"id\":", SimplePojo.class);
@@ -260,10 +249,6 @@ public class JsonCodegenSmokeTest {
         });
     }
 
-    // ============================================================================
-    // SECURITY / DENIAL OF SERVICE TESTS
-    // ============================================================================
-
     @Test
     @DisplayName("Deeply nested JSON (billion laughs style)")
     void deeply_nested_json_handling() {
@@ -272,9 +257,9 @@ public class JsonCodegenSmokeTest {
         // Create deeply nested JSON (100 levels)
         StringBuilder deepJson = new StringBuilder();
         int depth = 100;
-        for (int i = 0; i < depth; i++) deepJson.append("{\"a\":");
+        deepJson.repeat("{\"a\":", depth);
         deepJson.append("1");
-        for (int i = 0; i < depth; i++) deepJson.append("}");
+        deepJson.repeat("}", depth);
 
         // Should either handle or throw StackOverflowError
         assertDoesNotThrow(() -> {
@@ -294,13 +279,11 @@ public class JsonCodegenSmokeTest {
     void very_large_json_handling() {
         JsonAdapter adapter = new JsonAdapter(config());
 
-        // Create large string payload
         StringBuilder largeName = new StringBuilder();
-        for (int i = 0; i < 100000; i++) largeName.append("x");
+        largeName.repeat("x", 100000);
 
         String json = "{\"id\":1,\"name\":\"" + largeName + "\"}";
 
-        // Should handle without memory issues
         SimplePojo result = adapter.readValue(json, SimplePojo.class);
         assertNotNull(result);
         assertEquals(100000, result.name.length());
@@ -311,7 +294,6 @@ public class JsonCodegenSmokeTest {
     void many_fields_handling() {
         JsonAdapter adapter = new JsonAdapter(config());
 
-        // Create JSON with many unexpected fields
         StringBuilder manyFields = new StringBuilder("{");
         for (int i = 0; i < 1000; i++) {
             if (i > 0) manyFields.append(",");
@@ -319,7 +301,6 @@ public class JsonCodegenSmokeTest {
         }
         manyFields.append("}");
 
-        // Should handle gracefully
         SimplePojo result = adapter.readValue(manyFields.toString(), SimplePojo.class);
         assertNotNull(result);
     }
@@ -329,11 +310,9 @@ public class JsonCodegenSmokeTest {
     void unicode_edge_cases() {
         JsonAdapter adapter = new JsonAdapter(config());
 
-        // Valid unicode escape sequence
         SimplePojo emoji = adapter.readValue("{\"id\":1,\"name\":\"\\uD83D\\uDE80\"}", SimplePojo.class);
         assertEquals("🚀", emoji.name);
 
-        // Null bytes in JSON string - library may accept or reject
         assertDoesNotThrow(() -> {
             try {
                 SimplePojo result = adapter.readValue("{\"id\":1,\"name\":\"a\u0000b\"}", SimplePojo.class);
@@ -360,10 +339,6 @@ public class JsonCodegenSmokeTest {
         // Name should contain the literal string, not parse as nested JSON
         assertTrue(result.name.contains("id"));
     }
-
-    // ============================================================================
-    // PARTIAL WRITE / STREAMING TESTS
-    // ============================================================================
 
     @Test
     @DisplayName("Partial write with output stream")
@@ -397,10 +372,6 @@ public class JsonCodegenSmokeTest {
             adapter.writeValue(pojo, closedStream);
         });
     }
-
-    // ============================================================================
-    // EDGE CASE / BOUNDARY TESTS
-    // ============================================================================
 
     @Test
     @DisplayName("Boundary values (MAX_INT, MIN_INT, special floats)")
@@ -457,18 +428,5 @@ public class JsonCodegenSmokeTest {
 
         assertTrue(idIndex >= 0);
         assertTrue(nameIndex >= 0);
-    }
-
-    // ============================================================================
-    // Helper class for testing depth limits
-    // ============================================================================
-
-    private static class AdapterWithDepthLimit extends JsonAdapter {
-        private final int maxDepth;
-
-        AdapterWithDepthLimit(JsonConfig config, int maxDepth) {
-            super(config);
-            this.maxDepth = maxDepth;
-        }
     }
 }

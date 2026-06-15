@@ -151,7 +151,6 @@ public final class JsonMapperRegistry {
             if (elem == null) {
                 out.nullValue();
             } else {
-                // Recursively write element using adapter
                 writeElement(out, elem);
             }
         }

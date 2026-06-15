@@ -20,7 +20,7 @@ import java.util.Deque;
  * instead of serializing to a string.
  *
  * <p>It is passed directly to an existing {@link JsonWriterMapper},
- * which drives it with the same {@code beginObject}/{@code name}/{@code value}/…
+ * which drives it with the same {@code beginObject}/{@code name}/{@code value}/...
  * calls it would use for string output. The result is retrieved via {@link #result()}.
  *
  * <h3>State machine</h3>

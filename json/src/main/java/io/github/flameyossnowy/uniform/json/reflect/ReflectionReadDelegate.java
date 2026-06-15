@@ -15,10 +15,6 @@ import java.lang.reflect.*;
 import java.util.*;
 import java.util.function.Supplier;
 
-/**
- * Reflection-based JSON reader delegate supporting full CollectionKind and arrays,
- * null handling, sparse arrays, primitive vs object arrays, and module-safe reflection.
- */
 public final class ReflectionReadDelegate {
 
     private ReflectionReadDelegate() {}

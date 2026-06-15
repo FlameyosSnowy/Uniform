@@ -24,12 +24,10 @@ public final class JsonCursors {
         JsonCursorCache cache = JsonCursorCache.get();
 
         if (bytes.length < JsonCursorCache.SIMD_THRESHOLD) {
-            // Small input: skip pre-scan entirely
             byte[] decodeBuf = cache.acquireDecodeBuffer(Math.max(64, bytes.length));
             return new JsonCursor(true, cache, bytes, decodeBuf, null, config);
         }
 
-        // Large input: SIMD pre-scan pays off
         ScanResult scan = cache.acquireScanResult(bytes.length);
         SCANNER.scan(bytes, 0, bytes.length, scan);
         byte[] decodeBuf = cache.acquireDecodeBuffer(Math.max(64, bytes.length / 4));

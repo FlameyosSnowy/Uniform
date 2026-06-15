@@ -71,10 +71,6 @@ public final class ReflectionMapperFactory {
         }
     }
 
-    // -------------------------------------------------------------------------
-    // Reader bytecode generation
-    // -------------------------------------------------------------------------
-
     /**
      * Generates a class equivalent to:
      *
@@ -102,7 +98,7 @@ public final class ReflectionMapperFactory {
      * For simplicity the generated code uses the reflection-metadata at runtime
      * via a static field holding the ReflectionMetadata, keeping the bytecode
      * small and correct. The hot path (field-name dispatch) is a cascade of
-     * String.equals() - identical to what the annotation processor generates.
+     * String.equals()
      */
     private static byte[] generateReader(Class<?> type, ReflectionMetadata meta) {
         ClassFile cf = ClassFile.of();
@@ -212,10 +208,6 @@ public final class ReflectionMapperFactory {
             });
         });
     }
-
-    // -------------------------------------------------------------------------
-    // Hidden class loading
-    // -------------------------------------------------------------------------
 
     private static Class<?> loadHidden(Class<?> host, byte[] bytecode) {
         try {

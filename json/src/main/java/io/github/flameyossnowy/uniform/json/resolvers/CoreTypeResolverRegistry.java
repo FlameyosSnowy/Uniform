@@ -62,8 +62,6 @@ import java.util.function.Function;
  * Custom resolvers override built-ins for the same type. Call before first use.
  */
 public final class CoreTypeResolverRegistry {
-
-    /** Singleton - shared across all {@code JsonAdapter} instances. */
     public static final CoreTypeResolverRegistry INSTANCE = new CoreTypeResolverRegistry();
 
     @SuppressWarnings("rawtypes")

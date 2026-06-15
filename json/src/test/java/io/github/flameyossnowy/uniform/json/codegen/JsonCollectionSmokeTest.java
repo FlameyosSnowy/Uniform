@@ -214,10 +214,6 @@ public class JsonCollectionSmokeTest {
         assertTrue(read.priorities.isEmpty());
     }
 
-    // ============================================================================
-    // Tests to verify collections do NOT expose their private internal fields
-    // ============================================================================
-
     @Test
     void arrayList_does_not_expose_private_fields() {
         // Use concrete ArrayList type (not just List interface)
@@ -457,10 +453,6 @@ public class JsonCollectionSmokeTest {
         assertTrue(json.contains("\"scores\":[1,2,3]"), "scores should be JSON array");
         assertTrue(json.contains("\"children\":[{\"id\":1,\"name\":\"test\"}]"), "children should be JSON array of objects");
     }
-
-    // ============================================================================
-    // Tests for List.of(), Set.of(), Map.of() immutable collections (JPMS safety)
-    // ============================================================================
 
     @Test
     @DisplayName("Read JSON array into generic List using reflection fallback")
@@ -704,10 +696,6 @@ public class JsonCollectionSmokeTest {
 
         assertEquals("[[\"a\",\"b\"],[\"c\",\"d\"]]", json, "Nested List.of() should serialize correctly");
     }
-
-    // ============================================================================
-    // COLLECTION EDGE CASE / SECURITY TESTS
-    // ============================================================================
 
     @Test
     @DisplayName("Collection with all null elements")
@@ -1162,24 +1150,20 @@ public class JsonCollectionSmokeTest {
     @Test
     @DisplayName("Malformed collection JSON handling")
     void malformed_collection_json() {
-        // Array where object expected - library behavior varies
         assertDoesNotThrow(() -> {
             try {
                 PojoWithList result = ADAPTER.readValue("[1, 2, 3]", PojoWithList.class);
-                // May succeed or fail depending on implementation
             } catch (Exception e) {
                 // Exception is acceptable
             }
         });
 
-        // Object in array element context - library may be lenient
         assertDoesNotThrow(() -> {
             PojoWithList result = ADAPTER.readValue(
                 "{\"label\":\"test\",\"tags\":[\"a\",{}],\"scores\":[],\"children\":[]}",
                 PojoWithList.class
             );
             System.out.println(result);
-            // Object in string array may become null or cause type issues
         });
     }
 
