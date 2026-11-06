@@ -1,5 +1,6 @@
 package io.github.flameyossnowy.uniform.json.codegen;
 
+import io.github.flameyossnowy.uniform.core.annotations.SerializedObject;
 import io.github.flameyossnowy.uniform.json.ReflectionConfig;
 import io.github.flameyossnowy.uniform.json.codegen.fixtures.Circle;
 import io.github.flameyossnowy.uniform.json.codegen.fixtures.HasShape;
@@ -28,7 +29,9 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -428,5 +431,55 @@ public class JsonCodegenSmokeTest {
 
         assertTrue(idIndex >= 0);
         assertTrue(nameIndex >= 0);
+    }
+
+    @Test
+    @DisplayName("Field array")
+    void array() {
+        JsonAdapter adapter = new JsonAdapter(config());
+        String[] strs = {"A","B","CK"};
+        String written = adapter.writeValue(strs);
+        assertEquals("[\"A\",\"B\",\"CK\"]",written);
+    }
+
+    @Test
+    @DisplayName("Field array in map")
+    void array_in_map() {
+        JsonAdapter adapter = new JsonAdapter(config());
+        Map<String, String[]> map = new HashMap<>();
+        map.put("infoA", new String[]{"aa", "bb"});
+        map.put("infoB", new String[]{"cc", "dd"});
+        String written = adapter.writeValue(map);
+        assertEquals("{\"infoA\":[\"aa\",\"bb\"],\"infoB\":[\"cc\",\"dd\"]}",written);
+    }
+
+    @SerializedObject
+    public static class Product {
+        public int id;
+        public Map<String, String[]> info;
+
+        public Product(int id, Map<String, String[]> info) {
+            this.id = id;
+            this.info = info;
+        }
+
+        @Override
+        public String toString() {
+            return "Product{" +
+                    "id=" + id +
+                    ", info=" + info +
+                    '}';
+        }
+    }
+
+    @Test
+    @DisplayName("Field array in object")
+    void array_in_object() {
+        JsonAdapter adapter = new JsonAdapter(config());
+        Map<String, String[]> map = new HashMap<>();
+        map.put("infoA", new String[]{"aa", "bb"});
+        map.put("infoB", new String[]{"cc", "dd"});
+        String written = adapter.writeValue(new Product(1024, map));
+        assertEquals("{\"id\":1024,\"info\":{\"infoA\":[\"aa\",\"bb\"],\"infoB\":[\"cc\",\"dd\"]}}",written);
     }
 }
