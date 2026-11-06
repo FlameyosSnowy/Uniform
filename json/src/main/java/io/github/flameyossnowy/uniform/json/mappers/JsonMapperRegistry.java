@@ -143,7 +143,18 @@ public final class JsonMapperRegistry {
         }
         out.endArray();
     };
-
+    // Writer for array
+    private static final JsonWriterMapper<Object[]> ARRAY_WRITER = (out, value) -> {
+        out.beginArray();
+        for (Object elem : value) {
+            if (elem == null) {
+                out.nullValue();
+            } else {
+                writeElement(out, elem);
+            }
+        }
+        out.endArray();
+    };
     // Dynamic writers for Collection and Map types to avoid JPMS issues with internal implementations
     private static final JsonWriterMapper<Collection<?>> COLLECTION_WRITER = (out, value) -> {
         out.beginArray();
@@ -303,6 +314,7 @@ public final class JsonMapperRegistry {
             case Number n -> out.value(n.longValue());
             case Character n -> out.write(n);
             case Boolean b -> out.value(b);
+            case Object[] array -> ARRAY_WRITER.writeTo(out, array);
             case Collection<?> col -> COLLECTION_WRITER.writeTo(out, col);
             case Map<?, ?> map -> MAP_WRITER.writeTo(out, map);
             default -> {
@@ -324,6 +336,10 @@ public final class JsonMapperRegistry {
         tryLoadMissingGeneratedModules();
         mapper = WRITERS.get(type);
         if (mapper != null) return mapper;
+
+        if (type.isArray()) {
+            return ARRAY_WRITER;
+        }
 
         // Check for specific types before Collection/Map to ensure proper handling
         if (BitSet.class.isAssignableFrom(type)) {
