@@ -14,23 +14,12 @@ import java.util.*;
 import static java.lang.classfile.ClassFile.*;
 import static java.lang.constant.ConstantDescs.*;
 
-/**
- * Generates a concrete {@link JsonMapper} and {@link JsonWriterMapper} for a
- * target class at runtime using the Java 21 ClassFile API, then loads it as a
- * hidden class so it can be GC'd if the target class is unloaded.
- *
- * <p>Generated classes are cached in {@link JsonMapperRegistry} - subsequent
- * lookups are as fast as compile-time generated mappers.
- */
 public final class ReflectionMapperFactory {
-    // Descriptor constants we'll use repeatedly
     private static final ClassDesc CD_JsonReadCursor   = ClassDesc.of("io.github.flameyossnowy.uniform.json.parser.JsonReadCursor");
     private static final ClassDesc CD_JsonStringWriter = ClassDesc.of("io.github.flameyossnowy.uniform.json.writers.JsonStringWriter");
     private static final ClassDesc CD_JsonMapper       = ClassDesc.of("io.github.flameyossnowy.uniform.json.mappers.JsonMapper");
     private static final ClassDesc CD_JsonWriterMapper = ClassDesc.of("io.github.flameyossnowy.uniform.json.mappers.JsonWriterMapper");
-    private static final ClassDesc CD_JsonMapperRegistry = ClassDesc.of("io.github.flameyossnowy.uniform.json.mappers.JsonMapperRegistry");
     private static final ClassDesc CD_Object           = ClassDesc.of("java.lang.Object");
-    private static final ClassDesc CD_String           = ClassDesc.of("java.lang.String");
 
     private ReflectionMapperFactory() {}
 
@@ -112,11 +101,11 @@ public final class ReflectionMapperFactory {
             clb.withSuperclass(CD_Object);
             clb.with(SourceFileAttribute.of(generatedName + ".java"));
 
-            // Static field: ReflectionMetadata META
+            // Static field ReflectionMetadata META
             ClassDesc cdMeta = ClassDesc.of(ReflectionMetadata.class.getName());
             clb.withField("META", cdMeta, ACC_PUBLIC | ACC_STATIC | ACC_FINAL);
 
-            // Static initializer: META = ReflectionMetadata.of(Foo.class)
+            // Static initializer META = ReflectionMetadata.of(Foo.class)
             clb.withMethod(CLASS_INIT_NAME, MethodTypeDesc.of(CD_void), ACC_STATIC, mb -> {
                 mb.withCode(cb -> {
                     cb.ldc(cdTarget);

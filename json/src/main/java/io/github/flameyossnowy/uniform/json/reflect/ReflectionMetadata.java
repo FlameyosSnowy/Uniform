@@ -3,12 +3,6 @@ package io.github.flameyossnowy.uniform.json.reflect;
 import java.lang.reflect.*;
 import java.util.*;
 
-/**
- * Inspects a class once at first use and caches:
- *  - all readable properties (field / record component / getter)
- *  - all writable properties (field / setter / record constructor param)
- * Priority: record components > getters/setters > bare fields.
- */
 public final class ReflectionMetadata {
 
     public record Property(
@@ -43,9 +37,9 @@ public final class ReflectionMetadata {
     public final Class<?>          type;
     public final boolean           isRecord;
     public final List<Property>    properties;
-    /** For records: the canonical constructor, parameter order matches properties. */
+    /** For records */
     public final Constructor<?>    canonicalConstructor;
-    /** For regular classes: the no-arg constructor. */
+    /** For regular classes */
     public final Constructor<?>    noArgConstructor;
 
     private static final Map<Class<?>, ReflectionMetadata> CACHE =
@@ -119,12 +113,10 @@ public final class ReflectionMetadata {
     }
 
     private static ReflectionMetadata inspectBean(Class<?> type) {
-        // Collect getter/setter pairs first, then fall back to bare fields
         Map<String, Method>  getters = new LinkedHashMap<>();
         Map<String, Method>  setters = new LinkedHashMap<>();
         Map<String, Field>   fields  = new LinkedHashMap<>();
 
-        // Walk the class hierarchy for fields
         for (Class<?> c = type; c != null && c != Object.class; c = c.getSuperclass()) {
             for (Field f : c.getDeclaredFields()) {
                 int mod = f.getModifiers();
@@ -156,11 +148,9 @@ public final class ReflectionMetadata {
             }
         }
 
-        // Merge: prefer getter/setter pair, fall back to field
         List<Property> props = new ArrayList<>();
         Set<String> seen = new LinkedHashSet<>();
 
-        // Getters drive the property set
         for (Map.Entry<String, Method> e : getters.entrySet()) {
             String name   = e.getKey();
             Method getter = e.getValue();
@@ -181,7 +171,6 @@ public final class ReflectionMetadata {
         }
 
         Class<?>[] ctorTypes = new Class<?>[fields.size()];
-        // Bare fields not covered by a getter
         int i = 0;
         for (Map.Entry<String, Field> e : fields.entrySet()) {
             if (seen.contains(e.getKey())) continue;

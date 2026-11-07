@@ -8,7 +8,7 @@ import java.io.IOException;
 public final class JsonException extends RuntimeException {
     public JsonException(String msg) { super(msg); }
 
-    public JsonException(String msg, IOException e) { super(msg, e); }
+    public JsonException(String msg, Exception e) { super(msg, e); }
 
     @NotNull
     @Contract("-> new")
@@ -21,6 +21,10 @@ public final class JsonException extends RuntimeException {
     @NotNull
     @Contract("-> new")
     public static JsonException unterminatedString() { return new JsonException("Unterminated string"); }
+
+    @NotNull
+    @Contract("-> new")
+    public static JsonException missingValue() { return new JsonException("Missing value was detected while parsing a String JSON. If this is intended behavior; please enable JsonReadFeature.ALLOW_MISSING_VALUES."); }
 
     @NotNull
     @Contract("-> new")

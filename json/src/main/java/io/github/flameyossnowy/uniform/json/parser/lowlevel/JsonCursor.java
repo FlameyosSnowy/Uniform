@@ -190,6 +190,39 @@ public final class JsonCursor implements JsonReadCursor {
     }
 
     @Override
+    public @NotNull JsonValue fieldValueAsJsonValue() {
+        ensureValueLen();
+        final JsonValue v;
+        if (fieldValueLen == 0) {
+            if (this.allowMissingValues) v = JsonNull.INSTANCE;
+            else throw JsonException.missingValue();
+        } else {
+            final JsonCursor sub = new JsonCursor(noScan, cache, input, decodeBuffer, scan,
+                    fieldValueStart, fieldValueStart + fieldValueLen, this);
+            v = sub.parseValueInternal();
+        }
+        pos = fieldValueStart + fieldValueLen;
+        finishFieldAfterValue();
+        return v;
+    }
+
+    @Override
+    public @NotNull JsonValue elementValueAsJsonValue() {
+        ensureElementLen();
+        final JsonValue v;
+        if (elementValueLen == 0) {
+            v = JsonNull.INSTANCE;
+        } else {
+            final JsonCursor sub = new JsonCursor(noScan, cache, input, decodeBuffer, scan,
+                    elementValueStart, elementValueStart + elementValueLen, this);
+            v = sub.parseValueInternal();
+        }
+        pos = elementValueStart + elementValueLen;
+        finishElementAfterValue();
+        return v;
+    }
+
+    @Override
     public boolean enterObject() {
         skipWs();
         if (pos >= limit || TOKEN[input[pos] & 0xFF] != TOK_OBJ_OPEN) return false;
@@ -469,6 +502,7 @@ public final class JsonCursor implements JsonReadCursor {
         return v;
     }
 
+    @Override
     public @NotNull String elementValueParseString() {
         pos = elementValueStart;
         final String v = scanParseString();

@@ -171,6 +171,11 @@ public final class MapJsonCursor implements JsonReadCursor {
     }
 
     @Override
+    public @NotNull String elementValueParseString() {
+        return toString(currentElement);
+    }
+
+    @Override
     public @NotNull ByteSlice fieldName() {
         String key = currentKey != null ? currentKey : "";
         byte[] bytes = key.getBytes(StandardCharsets.UTF_8);
@@ -340,6 +345,7 @@ public final class MapJsonCursor implements JsonReadCursor {
         return toJsonValue(currentValue);
     }
 
+    @Override
     public @NotNull JsonValue elementValueAsJsonValue() {
         return toJsonValue(currentElement);
     }

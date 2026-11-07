@@ -82,6 +82,21 @@ public final class JsonDomCursor implements JsonReadCursor {
         // no-op
     }
 
+    @Override
+    public @NotNull JsonValue fieldValueAsJsonValue() {
+        return currentFieldValue();
+    }
+
+    @Override
+    public @NotNull JsonValue elementValueAsJsonValue() {
+        return currentElement();
+    }
+
+    @Override
+    public @NotNull String elementValueParseString() {
+        return coerceString(currentElement());
+    }
+
     private Map.Entry<String, JsonValue> currentEntry;
 
     @Override
@@ -184,7 +199,7 @@ public final class JsonDomCursor implements JsonReadCursor {
 
     @Override
     public @NotNull String fieldValueParseString() {
-        return coerceString(currentElement());
+        return coerceString(currentFieldValue());
     }
 
     @Override
@@ -209,7 +224,7 @@ public final class JsonDomCursor implements JsonReadCursor {
 
     @Override
     public boolean elementIsNull() {
-        return node.isNull();
+        return currentElement().isNull();
     }
 
     public @NotNull JsonValue currentElement() {

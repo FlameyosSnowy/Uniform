@@ -1,5 +1,6 @@
 package io.github.flameyossnowy.uniform.json.parser;
 
+import io.github.flameyossnowy.uniform.json.dom.JsonValue;
 import io.github.flameyossnowy.uniform.json.parser.lowlevel.*;
 import org.jetbrains.annotations.NotNull;
 
@@ -70,6 +71,20 @@ public interface JsonReadCursor {
      *         {@code false} otherwise
      */
     boolean enterObjectValue();
+
+    /**
+     * Returns the current field's value as a DOM node (JSON nullbecomes {@code JsonNull.INSTANCE}),
+     * and consumes the value like the other {@code fieldValueAs*()} accessors.
+     */
+    @NotNull JsonValue fieldValueAsJsonValue();
+
+    /** Array-element counterpart of {@link #fieldValueAsJsonValue()}. */
+    @NotNull JsonValue elementValueAsJsonValue();
+
+    /**
+     * @return the parsed array element as a string
+     */
+    @NotNull String elementValueParseString();
 
     /**
      * Called after a nested parse initiated by {@link #enterObjectValue()} (or the

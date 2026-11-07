@@ -212,8 +212,14 @@ public final class JsonObjectCursor implements JsonReadCursor {
         return currentElement == null;
     }
 
+    @Override
     public @NotNull JsonValue elementValueAsJsonValue() {
         return currentElement != null ? currentElement : JsonNull.INSTANCE;
+    }
+
+    @Override
+    public @NotNull String elementValueParseString() {
+        return toString(currentElement);
     }
 
     private static JsonObjectCursor subCursor(JsonValue v) {
