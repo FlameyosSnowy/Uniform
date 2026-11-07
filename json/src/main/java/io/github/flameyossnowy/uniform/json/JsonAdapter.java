@@ -33,16 +33,7 @@ import java.net.URI;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
-import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Queue;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ForkJoinPool;
@@ -331,11 +322,27 @@ public class JsonAdapter {
     /**
      * Converts a {@link JsonArray} to a {@link Queue} whose elements are
      * each converted to {@code elementType} via {@link #treeToValue}.
+     * <p>
+     * Not tolerant to elements of null; Use {@link JsonAdapter#treeToLinkedList(JsonArray, Class)} if you want nullable elements.
      */
     public <E> @NotNull Queue<E> treeToQueue(
         @NotNull JsonArray array,
         @NotNull Class<E> elementType) {
         ArrayDeque<E> result = new ArrayDeque<>(array.size());
+        for (int i = 0; i < array.size(); i++) {
+            result.add(Objects.requireNonNull(treeToValue(array.getRaw(i), elementType), "Null not accepted in treeToQueue. Use JsonAdapter#treeToLinkedList if this is intended behavior"));
+        }
+        return result;
+    }
+
+    /**
+     * Converts a {@link JsonArray} to a {@link Queue} whose elements are
+     * each converted to {@code elementType} via {@link #treeToValue}.
+     */
+    public <E> @NotNull LinkedList<E> treeToLinkedList(
+        @NotNull JsonArray array,
+        @NotNull Class<E> elementType) {
+        LinkedList<E> result = new LinkedList<>();
         for (int i = 0; i < array.size(); i++) {
             result.add(treeToValue(array.getRaw(i), elementType));
         }
@@ -386,12 +393,12 @@ public class JsonAdapter {
     }
 
     public <T> void writeValue(@NotNull T value, @NotNull OutputStream out) throws IOException {
-        byte[] bytes = writeValueAsBytes(value); // existing mapper produces bytes
+        byte[] bytes = writeValueAsBytes(value);
         out.write(bytes);
     }
 
     public void writeValue(@NotNull JsonValue value, @NotNull OutputStream out) throws IOException {
-        String json = writeValue(value); // existing JsonDomWriter
+        String json = writeValue(value);
         out.write(json.getBytes(StandardCharsets.UTF_8));
     }
 
