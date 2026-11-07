@@ -62,8 +62,8 @@ All benchmarks run with JMH in throughput mode (`ops/ms`, higher is better) on J
 
 ```kotlin
 dependencies {
-    implementation("io.github.flameyossnowy.uniform:json:1.5.5")
-    annotationProcessor("io.github.flameyossnowy.uniform:annotation-processor:1.5.5")
+    implementation("io.github.flameyossnowy.uniform:json:1.5.13")
+    annotationProcessor("io.github.flameyossnowy.uniform:annotation-processor:1.5.13")
 }
 
 tasks.withType<JavaCompile> {
