@@ -14,6 +14,7 @@ import io.github.flameyossnowy.uniform.json.dom.JsonShort;
 import io.github.flameyossnowy.uniform.json.dom.JsonString;
 import io.github.flameyossnowy.uniform.json.dom.JsonValue;
 import io.github.flameyossnowy.uniform.json.exceptions.JsonCoercionException;
+import io.github.flameyossnowy.uniform.json.exceptions.JsonException;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -268,7 +269,7 @@ public final class CoreTypeResolverRegistry {
                 for (T c : type.getEnumConstants()) {
                     if (((Enum<?>) c).name().equals(name)) return c;
                 }
-                throw new IllegalArgumentException("No enum constant " + type.getName() + "." + name);
+                throw new JsonException("No enum constant " + type.getName() + "." + name);
             }
 
             @Override

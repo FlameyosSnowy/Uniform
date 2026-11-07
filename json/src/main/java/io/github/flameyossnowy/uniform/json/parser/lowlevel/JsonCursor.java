@@ -265,6 +265,7 @@ public final class JsonCursor implements JsonReadCursor {
      * Advance into a nested array that is the current field's value, in-place.
      * Same contract as {@link #enterObjectValue()} but for '['.
      */
+
     public boolean enterArrayValue() {
         return enterValue(TOK_ARR_OPEN);
     }

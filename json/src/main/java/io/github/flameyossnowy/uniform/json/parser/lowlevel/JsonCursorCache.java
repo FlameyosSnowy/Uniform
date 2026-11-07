@@ -14,7 +14,6 @@ public final class JsonCursorCache {
     private byte[] decodeBuffer = new byte[1024];
 
     private JsonCursorCache() {
-        // Start with capacity for 1KB input; grows on demand
         scanResultCapacity = 1024;
         scanResult = ScanResult.create(scanResultCapacity);
     }
@@ -29,11 +28,10 @@ public final class JsonCursorCache {
      */
     public ScanResult acquireScanResult(int inputLength) {
         if (inputLength > scanResultCapacity) {
-            // Grow by 2x or to exact need, whichever is larger
             scanResultCapacity = Math.max(inputLength, scanResultCapacity * 2);
             scanResult = ScanResult.create(scanResultCapacity);
         } else {
-            scanResult.clear(); // zero the bitmask arrays without reallocation
+            scanResult.clear();
         }
         return scanResult;
     }

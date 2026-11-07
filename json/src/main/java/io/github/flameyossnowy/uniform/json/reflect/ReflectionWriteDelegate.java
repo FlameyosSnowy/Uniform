@@ -95,7 +95,6 @@ public final class ReflectionWriteDelegate {
             }
 
         } catch (Exception ignored) {
-            // fallthrough
         }
 
         out.nullValue();

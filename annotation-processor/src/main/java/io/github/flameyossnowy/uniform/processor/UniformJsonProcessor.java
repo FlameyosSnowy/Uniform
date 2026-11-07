@@ -67,8 +67,12 @@ public final class UniformJsonProcessor extends AbstractProcessor {
             "java.time.Month", "java.time.ZoneId", "java.util.TimeZone"
     );
 
-    private static final ClassName JSON_STRING =
-            ClassName.get("io.github.flameyossnowy.uniform.json.dom", "JsonString");
+    private static final ClassName JSON_MAPPER_REGISTRY =
+            ClassName.get("io.github.flameyossnowy.uniform.json.mappers", "JsonMapperRegistry");
+    private static final ClassName JSON_MAPPER =
+            ClassName.get("io.github.flameyossnowy.uniform.json.mappers", "JsonMapper");
+    private static final ClassName JSON_READ_CURSOR =
+            ClassName.get("io.github.flameyossnowy.uniform.json.parser", "JsonReadCursor");
     private static final ClassName CORE_REGISTRY =
             ClassName.get("io.github.flameyossnowy.uniform.json.resolvers", "CoreTypeResolverRegistry");
     private static final ClassName CORE_RESOLVER =
@@ -431,19 +435,16 @@ public final class UniformJsonProcessor extends AbstractProcessor {
         TypeName typeName = TypeName.get(typeMirror);
         Property property = new Property(javaName, jsonName, typeName, typeMirror, accessKind,
                 accessor, readAccessor, false, null);
-        if (typeMirror.getKind() == TypeKind.ARRAY) return property;
+        if (typeMirror.getKind() == TypeKind.ARRAY) {
+            enqueueTypeArgs(typeMirror, enqueue);
+            return property;
+        }
 
         if (typeMirror.getKind() == TypeKind.DECLARED) {
             Element te = ((DeclaredType) typeMirror).asElement();
             if (te instanceof TypeElement typeElement) {
                 if (collectionKind(typeMirror) != CollectionKind.NONE) {
-                    for (TypeMirror arg : ((DeclaredType) typeMirror).getTypeArguments()) {
-                        if (arg.getKind() == TypeKind.DECLARED) {
-                            Element argElem = ((DeclaredType) arg).asElement();
-                            if (argElem instanceof TypeElement argType && shouldEnqueueForCodegen(argType))
-                                enqueue.add(argType);
-                        }
-                    }
+                    enqueueTypeArgs(typeMirror, enqueue);
                     return property;
                 }
                 if (isCoreResolved(typeMirror)) return property;
@@ -715,7 +716,6 @@ public final class UniformJsonProcessor extends AbstractProcessor {
 
         if (ck == CollectionKind.LIST || ck == CollectionKind.SET || ck == CollectionKind.QUEUE) {
             TypeMirror argMirror = ((DeclaredType) p.typeMirror()).getTypeArguments().getFirst();
-            TypeName   argType   = TypeName.get(argMirror);
 
             String declaredFqcn = elements.getBinaryName(
                     (TypeElement) ((DeclaredType) p.typeMirror()).asElement()).toString();
@@ -726,7 +726,7 @@ public final class UniformJsonProcessor extends AbstractProcessor {
             cb.beginControlFlow("else");
             cb.addStatement("$T __col = new $T<>()", ifaceType, implClass);
             cb.beginControlFlow("while ($L.nextElement())", cursorExpr);
-            emitElementRead(cb, argType, jsonMapper, jsonMapperRegistry, "__col", cursorExpr);
+            emitElementReadAny(cb, argMirror, jsonMapper, jsonMapperRegistry, "__col", cursorExpr);
             cb.endControlFlow();
             cb.addStatement("$L.finishFieldAfterValue()", cursorExpr);
             cb.addStatement("$L = __col", var);
@@ -759,7 +759,7 @@ public final class UniformJsonProcessor extends AbstractProcessor {
             cb.beginControlFlow("else");
             cb.addStatement("$T __tmpList = new $T<>()", listOfComp, arrayList);
             cb.beginControlFlow("while ($L.nextElement())", cursorExpr);
-            emitElementRead(cb, compType, jsonMapper, jsonMapperRegistry, "__tmpList", cursorExpr);
+            emitElementReadAny(cb, compMirror, jsonMapper, jsonMapperRegistry, "__tmpList", cursorExpr);
             cb.endControlFlow();
             cb.addStatement("$L.finishFieldAfterValue()", cursorExpr);
 
@@ -804,7 +804,7 @@ public final class UniformJsonProcessor extends AbstractProcessor {
             cb.beginControlFlow("while ($L.nextField())", cursorExpr);
             cb.addStatement("String __rawKey = $L.fieldNameAsString()", cursorExpr);
             cb.addStatement("$T __key = $L", keyType, keyExpr);
-            emitMapValueRead(cb, valType, jsonMapper, jsonMapperRegistry, cursorExpr);
+            emitMapValueRead(cb, args.get(1), cursorExpr);
             cb.endControlFlow();
             cb.addStatement("$L.finishFieldAfterValue()", cursorExpr);
             cb.addStatement("$L = __map", var);
@@ -892,7 +892,24 @@ public final class UniformJsonProcessor extends AbstractProcessor {
         cb.addStatement("$L = new $T(stripQuotes($L.fieldValueParseString()))", var, t, cursorExpr);
     }
 
-    private static void emitElementRead(CodeBlock.Builder cb, TypeName elemType,
+    private boolean needsGenericRead(TypeMirror m) {
+        return m.getKind() == TypeKind.ARRAY || collectionKind(m) != CollectionKind.NONE || isEnum(m)
+                || TypeName.get(m).equals(ClassName.get("java.util", "BitSet"))
+                || TypeName.get(m).equals(ClassName.OBJECT);
+    }
+
+    private void emitElementReadAny(CodeBlock.Builder cb, TypeMirror elem, ClassName jsonMapper,
+                                    ClassName jsonMapperRegistry, String collVar, String cur) {
+        if (needsGenericRead(elem)) {
+            cb.addStatement("$T __ge = null", TypeName.get(elem).box());
+            emitReadValue(cb, elem, "__ge", cur, true, 0);
+            cb.addStatement("$L.add(__ge)", collVar);
+        } else {
+            emitElementRead(cb, TypeName.get(elem), jsonMapper, jsonMapperRegistry, collVar, cur);
+        }
+    }
+
+    private void emitElementRead(CodeBlock.Builder cb, TypeName elemType,
                                         ClassName jsonMapper, ClassName jsonMapperRegistry,
                                         String collVar, String arrCursorExpr) {
         if (elemType.equals(TypeName.INT)     || elemType.equals(TypeName.INT.box()))     { cb.addStatement("$L.add($L.elementValueAsInt())",     collVar, arrCursorExpr); return; }
@@ -912,7 +929,6 @@ public final class UniformJsonProcessor extends AbstractProcessor {
             return;
         }
 
-        ClassName jsonCursor = ClassName.get("io.github.flameyossnowy.uniform.json.parser", "JsonReadCursor");
         ClassName concreteCursor = ClassName.get("io.github.flameyossnowy.uniform.json.parser.lowlevel", "JsonCursor");
         if (elemType instanceof ClassName declared) {
             ClassName directReader = readerNameFor(declared);
@@ -934,43 +950,10 @@ public final class UniformJsonProcessor extends AbstractProcessor {
         }
     }
 
-    private static void emitMapValueRead(CodeBlock.Builder cb, TypeName valType,
-                                         ClassName jsonMapper, ClassName jsonMapperRegistry,
-                                         String cursorExpr) {
-        if (valType.equals(TypeName.INT)     || valType.equals(TypeName.INT.box()))     { cb.addStatement("__map.put(__key, $L.fieldValueAsInt())",     cursorExpr); return; }
-        if (valType.equals(TypeName.LONG)    || valType.equals(TypeName.LONG.box()))    { cb.addStatement("__map.put(__key, $L.fieldValueAsLong())",    cursorExpr); return; }
-        if (valType.equals(TypeName.DOUBLE)  || valType.equals(TypeName.DOUBLE.box()))  { cb.addStatement("__map.put(__key, $L.fieldValueAsDouble())",  cursorExpr); return; }
-        if (valType.equals(TypeName.FLOAT)   || valType.equals(TypeName.FLOAT.box()))   { cb.addStatement("__map.put(__key, $L.fieldValueAsFloat())",   cursorExpr); return; }
-        if (valType.equals(TypeName.SHORT)   || valType.equals(TypeName.SHORT.box()))   { cb.addStatement("__map.put(__key, (short) $L.fieldValueAsInt())",  cursorExpr); return; }
-        if (valType.equals(TypeName.BYTE)    || valType.equals(TypeName.BYTE.box()))    { cb.addStatement("__map.put(__key, (byte) $L.fieldValueAsInt())",   cursorExpr); return; }
-        if (valType.equals(TypeName.BOOLEAN) || valType.equals(TypeName.BOOLEAN.box())) { cb.addStatement("__map.put(__key, $L.fieldValueAsBoolean())", cursorExpr); return; }
-        if (valType.equals(ClassName.get(String.class)))                                { cb.addStatement("__map.put(__key, $L.fieldValueParseString())",  cursorExpr); return; }
-
-        if (isCoreResolved(valType)) {
-            cb.addStatement("$T __jv_mv = $L.fieldValueAsJsonValue()", JSON_VALUE, cursorExpr);
-            cb.addStatement("__map.put(__key, ($T) $T.INSTANCE.resolve($T.class).deserialize(__jv_mv))",
-                    valType.box(), CORE_REGISTRY, valType.box());
-            return;
-        }
-
-        ClassName concreteCursor = ClassName.get("io.github.flameyossnowy.uniform.json.parser.lowlevel", "JsonCursor");
-        if (valType instanceof ClassName declared) {
-            ClassName directReader = readerNameFor(declared);
-            cb.beginControlFlow("if (!$L.enterObjectValue())", cursorExpr);
-            cb.addStatement("__map.put(__key, null)");
-            cb.nextControlFlow("else");
-            cb.addStatement("__map.put(__key, (($T) $T.INSTANCE).readFields(($T) $L))",
-                    directReader, directReader, concreteCursor, cursorExpr);
-            cb.addStatement("$L.finishFieldAfterValue()", cursorExpr);
-            cb.endControlFlow();
-        } else {
-            cb.addStatement("$T __vm = ($T) $T.getReader($T.class)",
-                    ParameterizedTypeName.get(jsonMapper, valType),
-                    ParameterizedTypeName.get(jsonMapper, valType),
-                    jsonMapperRegistry, valType);
-            cb.addStatement("if (__vm == null) throw new IllegalStateException(\"No mapper for \" + $T.class)", valType);
-            cb.addStatement("__map.put(__key, ($T) __vm.map($L.fieldValueCursor()))", valType.box(), cursorExpr);
-        }
+    private void emitMapValueRead(CodeBlock.Builder cb, TypeMirror valMirror, String cursorExpr) {
+        cb.addStatement("$T __val = null", TypeName.get(valMirror).box());
+        emitReadValue(cb, valMirror, "__val", cursorExpr, false, 0);
+        cb.addStatement("__map.put(__key, __val)");
     }
 
     private void writeWriterInternal(ClassName target, ClassName writerName,
@@ -1164,7 +1147,7 @@ public final class UniformJsonProcessor extends AbstractProcessor {
         return cb.build();
     }
 
-    private static void emitElementWrite(CodeBlock.Builder cb, String elemExpr, TypeName elemType,
+    private void emitElementWrite(CodeBlock.Builder cb, String elemExpr, TypeName elemType,
                                          ClassName jsonWriterMapper, ClassName jsonMapperRegistry,
                                          boolean inArray) {
         String nullValueMethod = inArray ? "arrayNullValue" : "nullValue";
@@ -1202,24 +1185,52 @@ public final class UniformJsonProcessor extends AbstractProcessor {
             cb.addStatement("out.writeRaw($L ? $L : $L)", elemExpr, FIELD_TRUE, FIELD_FALSE);
             cb.endControlFlow();
         } else if (elemType.equals(ClassName.get(String.class))) {
+            cb.beginControlFlow("if ($L == null)", elemExpr);
+            cb.addStatement("out.$L()", nullValueMethod);
+            cb.nextControlFlow("else");
             cb.addStatement("out.writeQuotedAsciiOrUtf8((String) $L)", elemExpr);
+            cb.endControlFlow();
+        } else if (elemType instanceof ClassName en && isEnumName(en)) {
+            cb.beginControlFlow("if ($L == null)", elemExpr);
+            cb.addStatement("out.$L()", nullValueMethod);
+            cb.nextControlFlow("else");
+            cb.addStatement("out.writeQuotedAsciiOrUtf8($L.name())", elemExpr);
+            cb.endControlFlow();
         } else if (isCoreResolved(elemType)) {
             cb.beginControlFlow("if ($L == null)", elemExpr);
             cb.addStatement("out.$L()", nullValueMethod);
             cb.nextControlFlow("else");
             emitCoreWrite(cb, elemType, elemExpr, "__jv_el");
             cb.endControlFlow();
+        } else if (elemType.equals(ClassName.get("java.util", "BitSet"))) {
+            cb.beginControlFlow("if ($L == null)", elemExpr);
+            cb.addStatement("out.$L()", nullValueMethod);
+            cb.nextControlFlow("else");
+            cb.addStatement("out.beginArray()");
+            cb.beginControlFlow(
+                    "for (int __i = $L.nextSetBit(0); __i >= 0; __i = $L.nextSetBit(__i + 1))",
+                    elemExpr, elemExpr
+            );
+            cb.addStatement("out.writeInt(__i)");
+            cb.endControlFlow();
+            cb.addStatement("out.endArray()");
+            cb.endControlFlow();
         } else if (elemType instanceof ClassName declared) {
             ClassName directWriter = writerNameFor(declared);
             cb.addStatement("(($T) $T.INSTANCE).writeTo(out, $L)",
                     ParameterizedTypeName.get(jsonWriterMapper, elemType), directWriter, elemExpr);
+
         } else {
+            cb.beginControlFlow("if ($L == null)", elemExpr);
+            cb.addStatement("out.$L()", nullValueMethod);
+            cb.nextControlFlow("else");
             cb.addStatement("$T __ew = ($T) $T.getWriter($L.getClass())",
                     ParameterizedTypeName.get(jsonWriterMapper, ClassName.get(Object.class)),
                     ParameterizedTypeName.get(jsonWriterMapper, ClassName.get(Object.class)),
                     jsonMapperRegistry, elemExpr);
             cb.addStatement("if (__ew == null) throw new IllegalStateException(\"No writer for element\")");
             cb.addStatement("__ew.writeTo(out, $L)", elemExpr);
+            cb.endControlFlow();
         }
     }
 
@@ -1272,12 +1283,19 @@ public final class UniformJsonProcessor extends AbstractProcessor {
         ClassName mapEntry = ClassName.get("java.util", "Map", "Entry");
         TypeName entryType = ParameterizedTypeName.get(mapEntry, keyType, valType.box());
 
-        boolean isEnum = keyMirror.getKind() == TypeKind.DECLARED
-                && ((DeclaredType) keyMirror).asElement().getKind() == ElementKind.ENUM;
         String keyExpr;
-        if (keyType.equals(ClassName.get(String.class))) keyExpr = "__entry.getKey()";
-        else if (isEnum)                                 keyExpr = "__entry.getKey().name()";
-        else                                             keyExpr = "String.valueOf(__entry.getKey())";
+        if (keyType.equals(ClassName.get(String.class))) {
+            keyExpr = "__entry.getKey()";
+        } else if (isEnum(keyMirror)) {
+            keyExpr = "__entry.getKey().name()";
+        } else if (keyType.equals(TypeName.INT.box()) || keyType.equals(TypeName.LONG.box())
+                || keyType.equals(TypeName.SHORT.box()) || keyType.equals(TypeName.BYTE.box())
+                || keyType.equals(TypeName.DOUBLE.box()) || keyType.equals(TypeName.FLOAT.box())
+                || keyType.equals(TypeName.BOOLEAN.box()) || keyType.equals(TypeName.CHAR.box())) {
+            keyExpr = "String.valueOf(__entry.getKey())";
+        } else {
+            keyExpr = JSON_MAPPER_REGISTRY.canonicalName() + ".writeMapKey(__entry.getKey())";
+        }
 
         cb.beginControlFlow("if ($L == null)", access);
         cb.addStatement("out.writeRaw($L)", FIELD_NULL);
@@ -1398,7 +1416,7 @@ public final class UniformJsonProcessor extends AbstractProcessor {
         return type.isPrimitive() ? type.box() : type;
     }
 
-    private static CodeBlock mapKeyFromString(TypeMirror keyMirror, String raw) {
+    private CodeBlock mapKeyFromString(TypeMirror keyMirror, String raw) {
         TypeName key = TypeName.get(keyMirror);
 
         if (key.equals(ClassName.get(String.class)))  return CodeBlock.of("$L", raw);
@@ -1410,18 +1428,17 @@ public final class UniformJsonProcessor extends AbstractProcessor {
         if (key.equals(TypeName.FLOAT.box()))         return CodeBlock.of("Float.valueOf($L)", raw);
         if (key.equals(TypeName.BOOLEAN.box()))       return CodeBlock.of("Boolean.valueOf($L)", raw);
         if (key.equals(TypeName.CHAR.box()))          return CodeBlock.of("Character.valueOf($L.charAt(0))", raw);
+        if (isEnum(keyMirror))                        return CodeBlock.of("$T.valueOf($L)", key, raw);
 
-        if (keyMirror.getKind() == TypeKind.DECLARED
-                && ((DeclaredType) keyMirror).asElement().getKind() == ElementKind.ENUM) {
-            return CodeBlock.of("$T.valueOf($L)", key, raw);
-        }
-
-        // UUID, BigInteger, BigDecimal, URI, URL, Path, java.time.*: use the core resolvers
-        if (isCoreResolved(key)) {
-            return CodeBlock.of("($T) $T.INSTANCE.resolve($T.class).deserialize(new $T($L))",
-                    key, CORE_REGISTRY, key, JSON_STRING, raw);
+        if (key instanceof ClassName) {
+            return CodeBlock.of("($T) $T.readMapKey($L, $T.class)", key, JSON_MAPPER_REGISTRY, raw, key);
         }
         return null;
+    }
+
+    private static boolean isEnum(TypeMirror m) {
+        return m.getKind() == TypeKind.DECLARED
+                && ((DeclaredType) m).asElement().getKind() == ElementKind.ENUM;
     }
 
     private static ClassName mapImpl(String fqcn) {
@@ -1507,5 +1524,210 @@ public final class UniformJsonProcessor extends AbstractProcessor {
                 default    -> ClassName.get("java.util", "ArrayList");
             };
         };
+    }
+
+    private static boolean isBoxedOrString(TypeName t) {
+        return t.equals(ClassName.get(String.class)) || t.equals(TypeName.INT.box()) || t.equals(TypeName.LONG.box())
+                || t.equals(TypeName.SHORT.box()) || t.equals(TypeName.BYTE.box()) || t.equals(TypeName.DOUBLE.box())
+                || t.equals(TypeName.FLOAT.box()) || t.equals(TypeName.BOOLEAN.box()) || t.equals(TypeName.CHAR.box());
+    }
+
+    private boolean hasGeneratedMapper(ClassName c) {
+        TypeElement te = elements.getTypeElement(c.canonicalName());
+        return te != null && te.getKind() != ElementKind.INTERFACE
+                && !te.getModifiers().contains(Modifier.ABSTRACT) && shouldEnqueueForCodegen(te);
+    }
+
+    private CodeBlock newArray(TypeMirror arrayMirror, String size) {
+        int dims = 0;
+        TypeMirror base = arrayMirror;
+        while (base.getKind() == TypeKind.ARRAY) {
+            base = ((javax.lang.model.type.ArrayType) base).getComponentType();
+            dims++;
+        }
+        TypeName baseName = TypeName.get(processingEnv.getTypeUtils().erasure(base));
+        return CodeBlock.of("new $T[$L]$L", baseName, size, "[]".repeat(dims - 1));
+    }
+
+    /**
+     * Emits code that reads the value at the cursor's current position into {@code target}
+     * (declared by the caller, boxed type). {@code element} selects element vs field accessors.
+     */
+    private void emitReadValue(CodeBlock.Builder cb, TypeMirror type, String target,
+                               String cur, boolean element, int depth) {
+        cb.beginControlFlow("if ($T.consumeIfNull($L, $L))", JSON_MAPPER_REGISTRY, cur, element);
+        cb.addStatement("$L = null", target);
+        cb.nextControlFlow("else");
+        emitReadValueNonNull(cb, type, target, cur, element, depth);
+        cb.endControlFlow();
+    }
+
+    private void emitReadValueNonNull(CodeBlock.Builder cb, TypeMirror type, String target,
+                                      String cur, boolean element, int depth) {
+        final String slot  = element ? "element" : "field";
+        final String d     = String.valueOf(depth);
+        final TypeName t   = TypeName.get(type);
+        final TypeName box = t.box();
+        final String sub   = "__sub" + d;
+
+        if (box.equals(TypeName.INT.box()))     { cb.addStatement("$L = $L.$LValueAsInt()",     target, cur, slot); return; }
+        if (box.equals(TypeName.LONG.box()))    { cb.addStatement("$L = $L.$LValueAsLong()",    target, cur, slot); return; }
+        if (box.equals(TypeName.DOUBLE.box()))  { cb.addStatement("$L = $L.$LValueAsDouble()",  target, cur, slot); return; }
+        if (box.equals(TypeName.FLOAT.box()))   { cb.addStatement("$L = $L.$LValueAsFloat()",   target, cur, slot); return; }
+        if (box.equals(TypeName.SHORT.box()))   { cb.addStatement("$L = $L.$LValueAsShort()",   target, cur, slot); return; }
+        if (box.equals(TypeName.BYTE.box()))    { cb.addStatement("$L = $L.$LValueAsByte()",    target, cur, slot); return; }
+        if (box.equals(TypeName.BOOLEAN.box())) { cb.addStatement("$L = $L.$LValueAsBoolean()", target, cur, slot); return; }
+        if (box.equals(TypeName.CHAR.box()))    { cb.addStatement("$L = $L.$LValueParseString().charAt(0)", target, cur, slot); return; }
+        if (box.equals(ClassName.get(String.class))) { cb.addStatement("$L = $L.$LValueParseString()", target, cur, slot); return; }
+
+        if (isEnum(type)) {
+            cb.addStatement("$L = $T.valueOf($L.$LValueParseString())", target, t, cur, slot);
+            return;
+        }
+
+        if (isCoreResolved(box)) {
+            String jv = "__jv" + d;
+            cb.addStatement("$T $L = $L.$LValueAsJsonValue()", JSON_VALUE, jv, cur, slot);
+            cb.addStatement("$L = ($T) $T.INSTANCE.resolve($T.class).deserialize($L)",
+                    target, box, CORE_REGISTRY, box, jv);
+            return;
+        }
+
+        if (box.equals(ClassName.OBJECT)) {
+            cb.addStatement("$L = $T.readUntyped($L.$LValueCursor())", target, JSON_MAPPER_REGISTRY, cur, slot);
+            return;
+        }
+
+        if (box.equals(ClassName.get("java.util", "BitSet"))) {
+            cb.addStatement("$T $L = $L.$LValueCursor()", JSON_READ_CURSOR, sub, cur, slot);
+            cb.beginControlFlow("if (!$L.enterArray())", sub);
+            cb.addStatement("$L = null", target);
+            cb.nextControlFlow("else");
+            cb.addStatement("java.util.BitSet __bs$L = new java.util.BitSet()", d);
+            cb.beginControlFlow("while ($L.nextElement())", sub);
+            cb.addStatement("__bs$L.set($L.elementValueAsInt())", d, sub);
+            cb.endControlFlow();
+            cb.addStatement("$L = __bs$L", target, d);
+            cb.endControlFlow();
+            return;
+        }
+
+        if (type.getKind() == TypeKind.ARRAY) {
+            TypeMirror comp = ((javax.lang.model.type.ArrayType) type).getComponentType();
+            TypeName compBox = TypeName.get(comp).box();
+            String list = "__l" + d, el = "__e" + d;
+
+            cb.addStatement("$T $L = $L.$LValueCursor()", JSON_READ_CURSOR, sub, cur, slot);
+            cb.beginControlFlow("if (!$L.enterArray())", sub);
+            cb.addStatement("$L = null", target);
+            cb.nextControlFlow("else");
+            cb.addStatement("$T $L = new $T<>()",
+                    ParameterizedTypeName.get(ClassName.get("java.util", "List"), compBox), list,
+                    ClassName.get("java.util", "ArrayList"));
+            cb.beginControlFlow("while ($L.nextElement())", sub);
+            cb.addStatement("$T $L = null", compBox, el);
+            emitReadValue(cb, comp, el, sub, true, depth + 1);
+            cb.addStatement("$L.add($L)", list, el);
+            cb.endControlFlow();
+            cb.addStatement("$L = $L", target, newArray(type, list + ".size()"));
+            cb.beginControlFlow("for (int __i$L = 0; __i$L < $L.size(); __i$L++)", d, d, list, d);
+            if (comp.getKind().isPrimitive()) {
+                cb.addStatement("$T __v$L = $L.get(__i$L)", compBox, d, list, d);
+                cb.addStatement("$L[__i$L] = __v$L == null ? $L : __v$L",
+                        target, d, d, primitiveZero(TypeName.get(comp)), d);
+            } else {
+                cb.addStatement("$L[__i$L] = $L.get(__i$L)", target, d, list, d);
+            }
+            cb.endControlFlow();
+            cb.endControlFlow();
+            return;
+        }
+
+        CollectionKind ck = collectionKind(type);
+        if (ck == CollectionKind.LIST || ck == CollectionKind.SET || ck == CollectionKind.QUEUE) {
+            DeclaredType dt = (DeclaredType) type;
+            TypeMirror elem = dt.getTypeArguments().getFirst();
+            TypeName elemBox = TypeName.get(elem).box();
+            String fqcn = elements.getBinaryName((TypeElement) dt.asElement()).toString();
+            String col = "__c" + d, el = "__e" + d;
+
+            cb.addStatement("$T $L = $L.$LValueCursor()", JSON_READ_CURSOR, sub, cur, slot);
+            cb.beginControlFlow("if (!$L.enterArray())", sub);
+            cb.addStatement("$L = null", target);
+            cb.nextControlFlow("else");
+            cb.addStatement("$T $L = new $T<>()", t, col, collectionImpl(fqcn, ck));
+            cb.beginControlFlow("while ($L.nextElement())", sub);
+            cb.addStatement("$T $L = null", elemBox, el);
+            emitReadValue(cb, elem, el, sub, true, depth + 1);
+            cb.addStatement("$L.add($L)", col, el);
+            cb.endControlFlow();
+            cb.addStatement("$L = $L", target, col);
+            cb.endControlFlow();
+            return;
+        }
+
+        if (ck == CollectionKind.MAP) {
+            DeclaredType dt = (DeclaredType) type;
+            TypeMirror keyM = dt.getTypeArguments().get(0);
+            TypeMirror valM = dt.getTypeArguments().get(1);
+            String fqcn = elements.getBinaryName((TypeElement) dt.asElement()).toString();
+            String map = "__m" + d, rk = "__rk" + d, key = "__k" + d, val = "__v" + d;
+
+            CodeBlock keyExpr = mapKeyFromString(keyM, rk);
+            if (keyExpr == null) {
+                processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR,
+                        "Unsupported map key type " + TypeName.get(keyM) + " in nested map " + t, null);
+                cb.addStatement("$L = null", target);
+                return;
+            }
+            cb.addStatement("$T $L = $L.$LValueCursor()", JSON_READ_CURSOR, sub, cur, slot);
+            cb.beginControlFlow("if (!$L.enterObject())", sub);
+            cb.addStatement("$L = null", target);
+            cb.nextControlFlow("else");
+            cb.addStatement("$T $L = new $T<>()", t, map, mapImpl(fqcn));
+            cb.beginControlFlow("while ($L.nextField())", sub);
+            cb.addStatement("String $L = $L.fieldNameAsString()", rk, sub);
+            cb.addStatement("$T $L = $L", TypeName.get(keyM), key, keyExpr);
+            cb.addStatement("$T $L = null", TypeName.get(valM).box(), val);
+            emitReadValue(cb, valM, val, sub, false, depth + 1);
+            cb.addStatement("$L.put($L, $L)", map, key, val);
+            cb.endControlFlow();
+            cb.addStatement("$L = $L", target, map);
+            cb.endControlFlow();
+            return;
+        }
+
+        if (t instanceof ClassName declared) {
+            cb.addStatement("$T $L = $L.$LValueCursor()", JSON_READ_CURSOR, sub, cur, slot);
+            if (hasGeneratedMapper(declared)) {
+                cb.addStatement("$L = $T.INSTANCE.map($L)", target, readerNameFor(declared), sub);
+            } else {
+                String m = "__mp" + d;
+                TypeName mapperType = ParameterizedTypeName.get(JSON_MAPPER, t);
+                cb.addStatement("$T $L = ($T) $T.getReader($T.class)", mapperType, m, mapperType, JSON_MAPPER_REGISTRY, t);
+                cb.addStatement("if ($L == null) throw new IllegalStateException(\"No mapper for \" + $T.class)", m, t);
+                cb.addStatement("$L = $L.map($L)", target, m, sub);
+            }
+            return;
+        }
+
+        processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR, "Unsupported nested value type " + t, null);
+        cb.addStatement("$L = null", target);
+    }
+
+    private void enqueueTypeArgs(TypeMirror type, Deque<TypeElement> enqueue) {
+        if (type.getKind() == TypeKind.ARRAY) {
+            enqueueTypeArgs(((javax.lang.model.type.ArrayType) type).getComponentType(), enqueue);
+            return;
+        }
+        if (type.getKind() != TypeKind.DECLARED) return;
+        DeclaredType dt = (DeclaredType) type;
+        if (dt.asElement() instanceof TypeElement te && shouldEnqueueForCodegen(te)) enqueue.add(te);
+        for (TypeMirror arg : dt.getTypeArguments()) enqueueTypeArgs(arg, enqueue);
+    }
+
+    private boolean isEnumName(ClassName c) {
+        TypeElement te = elements.getTypeElement(c.canonicalName());
+        return te != null && te.getKind() == ElementKind.ENUM;
     }
 }

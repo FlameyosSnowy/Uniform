@@ -1,5 +1,7 @@
 package io.github.flameyossnowy.uniform.json.writers;
 
+import io.github.flameyossnowy.uniform.json.dom.JsonValue;
+
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 
@@ -46,6 +48,10 @@ public sealed class JsonStringWriter permits JsonDomBuilder {
     private void ensure(int extra) {
         if (pos + extra > buf.length)
             buf = Arrays.copyOf(buf, Math.max(buf.length * 2, pos + extra));
+    }
+
+    public void writeJsonValue(JsonValue b) {
+        write(b.toString().getBytes(StandardCharsets.UTF_8));
     }
 
     public void write(byte b) {

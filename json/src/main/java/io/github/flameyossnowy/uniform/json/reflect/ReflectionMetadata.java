@@ -8,9 +8,9 @@ public final class ReflectionMetadata {
     public record Property(
         String    name,
         Class<?>  type,
-        Type      genericType,   // for best-effort List<X> support
-        Member    reader,        // Field or Method (getter / record accessor)
-        Member    writer,        // Field or Method (setter) - null for records
+        Type      genericType,
+        Member    reader,
+        Member    writer,
         Class<?>  owner
     ) {
         public Object read(Object instance) throws ReflectiveOperationException {

@@ -2,9 +2,13 @@ package io.github.flameyossnowy.uniform.json.mappers;
 
 import io.github.flameyossnowy.uniform.json.JsonConfig;
 import io.github.flameyossnowy.uniform.json.ReflectionConfig;
+import io.github.flameyossnowy.uniform.json.dom.JsonString;
+import io.github.flameyossnowy.uniform.json.exceptions.JsonException;
 import io.github.flameyossnowy.uniform.json.parser.JsonReadCursor;
 import io.github.flameyossnowy.uniform.json.parser.lowlevel.ByteSlice;
 import io.github.flameyossnowy.uniform.json.reflect.ReflectionMapperFactory;
+import io.github.flameyossnowy.uniform.json.resolvers.CoreTypeResolver;
+import io.github.flameyossnowy.uniform.json.resolvers.CoreTypeResolverRegistry;
 import org.jetbrains.annotations.Nullable;
 
 import java.lang.reflect.Array;
@@ -185,14 +189,13 @@ public final class JsonMapperRegistry {
     };
 
     // Writer for array
-    private static final JsonWriterMapper<Object[]> ARRAY_WRITER = (out, value) -> {
+    private static final JsonWriterMapper<Object> ARRAY_WRITER = (out, value) -> {
         out.beginArray();
-        for (Object elem : value) {
-            if (elem == null) {
-                out.nullValue();
-            } else {
-                writeElement(out, elem);
-            }
+        final int n = Array.getLength(value);
+        for (int i = 0; i < n; i++) {
+            Object elem = Array.get(value, i);
+            if (elem == null) out.nullValue();
+            else writeElement(out, elem);
         }
         out.endArray();
     };
@@ -222,7 +225,7 @@ public final class JsonMapperRegistry {
     private static final JsonWriterMapper<Map<?, ?>> MAP_WRITER = (out, value) -> {
         out.beginObject();
         for (Map.Entry<?, ?> entry : value.entrySet()) {
-            out.name(String.valueOf(entry.getKey()));
+            out.name(writeMapKey(entry.getKey()));
             Object v = entry.getValue();
             if (v == null) out.nullValue();
             else writeElement(out, v);
@@ -483,7 +486,8 @@ public final class JsonMapperRegistry {
             case Number n -> out.value(n.longValue());
             case Character n -> out.write(n);
             case Boolean b -> out.value(b);
-            case Object[] array -> ARRAY_WRITER.writeTo(out, array);
+            case Enum<?> e -> out.value(e.name());
+            case Object o when o.getClass().isArray() -> ARRAY_WRITER.writeTo(out, o);
             case Collection<?> col -> COLLECTION_WRITER.writeTo(out, col);
             case Map<?, ?> map -> MAP_WRITER.writeTo(out, map);
             default -> {
@@ -547,5 +551,65 @@ public final class JsonMapperRegistry {
         }
         tryRegisterByName(registry, "io.github.flameyossnowy.uniform.generated.UniformGeneratedJsonModule", cfg);
         tryRegisterByName(registry, "io.github.flameyossnowy.uniform.generated.UniformGeneratedJsonModuleJmh", cfg);
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    public static Object readMapKey(String raw, Class<?> keyType) {
+        if (keyType == String.class || keyType == Object.class || keyType == CharSequence.class) return raw;
+        if (keyType == Integer.class || keyType == int.class)         return Integer.valueOf(raw);
+        if (keyType == Long.class    || keyType == long.class)        return Long.valueOf(raw);
+        if (keyType == Short.class   || keyType == short.class)       return Short.valueOf(raw);
+        if (keyType == Byte.class    || keyType == byte.class)        return Byte.valueOf(raw);
+        if (keyType == Double.class  || keyType == double.class)      return Double.valueOf(raw);
+        if (keyType == Float.class   || keyType == float.class)       return Float.valueOf(raw);
+        if (keyType == Boolean.class || keyType == boolean.class)     return Boolean.valueOf(raw);
+        if (keyType == Character.class || keyType == char.class) {
+            if (raw.length() != 1) throw new JsonException("Map key '" + raw + "' is not a single char");
+            return raw.charAt(0);
+        }
+        if (keyType.isEnum()) {
+            try {
+                return Enum.valueOf((Class) keyType, raw);
+            } catch (IllegalArgumentException e) {
+                throw new JsonException("No enum constant " + raw + " for " + keyType.getCanonicalName());
+            }
+        }
+
+        CoreTypeResolver<?> resolver = CoreTypeResolverRegistry.INSTANCE.resolve(keyType);
+        if (resolver != null) return resolver.deserialize(new JsonString(raw));
+
+        throw new JsonException("No CoreTypeResolver for map key type " + keyType.getName()
+                + "; register one via CoreTypeResolverRegistry.INSTANCE.register(...)");
+    }
+
+    @SuppressWarnings("unchecked")
+    public static String writeMapKey(Object key) {
+        if (key == null) return "null";
+        if (key instanceof String s) return s;
+        if (key instanceof Number || key instanceof Boolean || key instanceof Character) return String.valueOf(key);
+        if (key instanceof Enum<?> e) return e.name();
+
+        CoreTypeResolver<Object> resolver = (CoreTypeResolver<Object>) CoreTypeResolverRegistry.INSTANCE.resolve(key.getClass());
+        if (resolver != null) {
+            String s = resolver.serialize(key).toString();
+            // JsonString#toString may render the surrounding quotes
+            if (s.length() >= 2 && s.charAt(0) == '"' && s.charAt(s.length() - 1) == '"') {
+                return s.substring(1, s.length() - 1);
+            }
+            return s;
+        }
+        throw new JsonException("No CoreTypeResolver for map key type " + key.getClass().getName());
+    }
+
+    /** If the current field/element value is JSON null, consumes it and returns true. */
+    public static boolean consumeIfNull(JsonReadCursor c, boolean element) {
+        ByteSlice raw = element ? c.elementValue() : c.fieldValue();
+        if (raw.length() == 4
+                && raw.byteAt(0) == 'n' && raw.byteAt(1) == 'u'
+                && raw.byteAt(2) == 'l' && raw.byteAt(3) == 'l') {
+            if (element) c.elementValueCursor(); else c.fieldValueCursor(); // consumes the value
+            return true;
+        }
+        return false;
     }
 }

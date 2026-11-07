@@ -231,7 +231,7 @@ public final class JsonDomCursor implements JsonReadCursor {
         if (!(node instanceof JsonArray arr))
             throw new IllegalStateException("Not in array context");
         if (arrayIndex < 0 || arrayIndex >= arr.size())
-            throw new IllegalStateException("No current element - call nextElement() first");
+            throw new IllegalStateException("No current element; call nextElement() first");
         JsonValue v = arr.getRaw(arrayIndex);
         return v;
     }

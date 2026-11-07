@@ -53,10 +53,6 @@ public final class ReflectionReadDelegate {
         return instantiate(meta, values);
     }
 
-    // ------------------------------------------------------------------
-    // Core dispatch
-    // ------------------------------------------------------------------
-
     private static Object readValue(JsonReadCursor cursor, Slot slot, Type genericType,
                                     ReflectionMetadata.Property prop, Class<?> owner) {
         Class<?> type = rawClass(genericType);
@@ -76,16 +72,14 @@ public final class ReflectionReadDelegate {
         }
 
         if (isNullValue(cursor, slot)) {
-            subCursor(cursor, slot); // consumes the value so the parent cursor moves past "null"
+            subCursor(cursor, slot);
             return type.isPrimitive() ? defaultValue(type) : null;
         }
 
-        // Untyped: Object / wildcard / unbound type variable
         if (type == Object.class) {
             return JsonMapperRegistry.readUntyped(subCursor(cursor, slot));
         }
 
-        // Primitives, wrappers, String
         if (type == String.class || type == CharSequence.class) return slot == Slot.FIELD ? cursor.fieldValueAsUnquotedString() : cursor.elementValueAsUnquotedString();
         if (type == int.class     || type == Integer.class)   return slot == Slot.FIELD ? cursor.fieldValueAsInt()     : cursor.elementValueAsInt();
         if (type == long.class    || type == Long.class)      return slot == Slot.FIELD ? cursor.fieldValueAsLong()    : cursor.elementValueAsLong();
@@ -99,7 +93,6 @@ public final class ReflectionReadDelegate {
             return s.isEmpty() ? '\0' : s.charAt(0);
         }
 
-        // BitSet
         if (type == BitSet.class) {
             JsonReadCursor sub = subCursor(cursor, slot);
             if (!sub.enterArray()) return null;
@@ -108,24 +101,20 @@ public final class ReflectionReadDelegate {
             return bits;
         }
 
-        // Arrays (primitive and object, nested)
         if (type.isArray()) {
             Type component = genericType instanceof GenericArrayType ga
                     ? ga.getGenericComponentType() : type.getComponentType();
             return readArray(cursor, slot, component, owner);
         }
 
-        // Collections: List, Set, Queue, Deque, SortedSet, Collection, concrete types...
         if (Collection.class.isAssignableFrom(type)) {
             return readCollection(cursor, slot, type, typeArg(genericType, 0), owner);
         }
 
-        // Maps
         if (Map.class.isAssignableFrom(type)) {
             return readMap(cursor, slot, type, typeArg(genericType, 0), typeArg(genericType, 1), owner);
         }
 
-        // Core resolvers: enums, UUID, BigDecimal, java.time.*, custom CoreTypeResolvers...
         CoreTypeResolver<?> core = CoreTypeResolverRegistry.INSTANCE.resolve(type);
         if (core != null) {
             JsonValue jv = slot == Slot.FIELD ? cursor.fieldValueAsJsonValue() : cursor.elementValueAsJsonValue();
@@ -137,15 +126,10 @@ public final class ReflectionReadDelegate {
             }
         }
 
-        // Nested POJO / record: generated mapper first, reflection second
         JsonMapper<?> nested = JsonMapperRegistry.getReader(type);
         if (nested == null) nested = ReflectionMapperFactory.buildReader(type);
         return nested.map(subCursor(cursor, slot));
     }
-
-    // ------------------------------------------------------------------
-    // Containers
-    // ------------------------------------------------------------------
 
     private static Object readCollection(JsonReadCursor cursor, Slot slot, Class<?> collectionType,
                                          Type elementType, Class<?> owner) {
@@ -192,42 +176,15 @@ public final class ReflectionReadDelegate {
     }
 
     private static Map<Object, Object> newMap(Class<?> type) {
-        if (type.isAssignableFrom(LinkedHashMap.class))   return new LinkedHashMap<>();   // Map, HashMap, LinkedHashMap
-        if (type.isAssignableFrom(TreeMap.class))         return new TreeMap<>();         // SortedMap, NavigableMap, TreeMap
-        if (type.isAssignableFrom(ConcurrentHashMap.class)) return new ConcurrentHashMap<>(); // ConcurrentMap
+        if (type.isAssignableFrom(LinkedHashMap.class))   return new LinkedHashMap<>();
+        if (type.isAssignableFrom(TreeMap.class))         return new TreeMap<>();
+        if (type.isAssignableFrom(ConcurrentHashMap.class)) return new ConcurrentHashMap<>();
         throw new JsonException("Unsupported map type " + type.getName());
     }
 
-    @SuppressWarnings({"unchecked", "rawtypes"})
-    private static Object convertMapKey(String key, Class<?> k) {
-        if (k == String.class || k == Object.class || k == CharSequence.class) return key;
-        if (k == int.class     || k == Integer.class)    return Integer.valueOf(key);
-        if (k == long.class    || k == Long.class)       return Long.valueOf(key);
-        if (k == short.class   || k == Short.class)      return Short.valueOf(key);
-        if (k == byte.class    || k == Byte.class)       return Byte.valueOf(key);
-        if (k == double.class  || k == Double.class)     return Double.valueOf(key);
-        if (k == float.class   || k == Float.class)      return Float.valueOf(key);
-        if (k == boolean.class || k == Boolean.class)    return Boolean.valueOf(key);
-        if (k == char.class    || k == Character.class) {
-            if (key.length() != 1) throw new JsonException("Map key '" + key + "' is not a single char");
-            return key.charAt(0);
-        }
-        if (k.isEnum()) {
-            try {
-                return Enum.valueOf((Class<? extends Enum>) k, key);
-            } catch (IllegalArgumentException e) {
-                throw new JsonException("No enum constant " + key + " in " + k.getCanonicalName() + ".");
-            }
-        }
-        if (k == UUID.class)        return UUID.fromString(key);
-        if (k == BigInteger.class)  return new BigInteger(key);
-        if (k == BigDecimal.class)  return new BigDecimal(key);
-        throw new JsonException("Unsupported map key type " + k.getName());
+    private static Object convertMapKey(String key, Class<?> keyType) {
+        return JsonMapperRegistry.readMapKey(key, keyType);
     }
-
-    // ------------------------------------------------------------------
-    // Helpers
-    // ------------------------------------------------------------------
 
     private static JsonReadCursor subCursor(JsonReadCursor cursor, Slot slot) {
         return slot == Slot.FIELD ? cursor.fieldValueCursor() : cursor.elementValueCursor();

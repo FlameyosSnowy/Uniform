@@ -12,6 +12,7 @@ import io.github.flameyossnowy.uniform.json.mappers.JsonMapperRegistry;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.time.LocalDate;
 import java.util.*;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -393,5 +394,111 @@ public class JsonCollectionsAndMapsTest {
         assertEquals(m.byLong, copy.byLong);
         assertEquals(m.byColor, copy.byColor);
         assertEquals(m.byUuid, copy.byUuid);
+    }
+
+    @SerializedObject
+    public static class NestedValueMaps {
+        public Map<String, Map<String, Integer>> nested;
+        public Map<String, List<String>> lists;
+        public Map<String, Set<Integer>> sets;
+        public Map<String, Color> colors;
+        public Map<String, int[]> primitiveArrays;
+        public Map<String, String[][]> matrices;
+        public Map<String, UUID> ids;
+        public Map<String, Map<String, List<Long>>> deep;
+        public Map<String, Inner> objects;
+        public Map<String, BitSet> bits;
+        public Map<LocalDate, String> byDate;
+        public Map<UUID, Color> uuidToColor;
+
+        public NestedValueMaps() {}
+    }
+
+    private static final UUID ID = UUID.fromString("123e4567-e89b-12d3-a456-426614174000");
+
+    private static final String NESTED_JSON = "{"
+            + "\"nested\":{\"a\":{\"x\":1,\"y\":2}},"
+            + "\"lists\":{\"k\":[\"a\",\"b\"],\"empty\":[]},"
+            + "\"sets\":{\"s\":[3,3,4]},"
+            + "\"colors\":{\"c\":\"GREEN\"},"
+            + "\"primitiveArrays\":{\"p\":[1,2,3]},"
+            + "\"matrices\":{\"m\":[[\"a\",\"b\"],[\"c\"]]},"
+            + "\"ids\":{\"u\":\"" + ID + "\"},"
+            + "\"deep\":{\"o\":{\"i\":[1,2]}},"
+            + "\"objects\":{\"n\":{\"i\":7}},"
+            + "\"bits\":{\"b\":[1,5]},"
+            + "\"byDate\":{\"2026-11-07\":\"today\"},"
+            + "\"uuidToColor\":{\"" + ID + "\":\"RED\"}"
+            + "}";
+
+    @Test
+    @DisplayName("Generated reader handles arbitrarily nested map values and core-resolver keys")
+    void processor_nested_map_values() {
+        NestedValueMaps m = adapter().readValue(NESTED_JSON, NestedValueMaps.class);
+
+        assertEquals(Map.of("x", 1, "y", 2), m.nested.get("a"));
+        assertEquals(List.of("a", "b"), m.lists.get("k"));
+        assertEquals(List.of(), m.lists.get("empty"));
+        assertEquals(Set.of(3, 4), m.sets.get("s"));
+        assertEquals(Color.GREEN, m.colors.get("c"));
+        assertArrayEquals(new int[]{1, 2, 3}, m.primitiveArrays.get("p"));
+        assertArrayEquals(new String[][]{{"a", "b"}, {"c"}}, m.matrices.get("m"));
+        assertEquals(ID, m.ids.get("u"));
+        assertEquals(List.of(1L, 2L), m.deep.get("o").get("i"));
+        assertEquals(7, m.objects.get("n").i);
+        assertTrue(m.bits.get("b").get(1) && m.bits.get("b").get(5));
+        assertEquals("today", m.byDate.get(LocalDate.of(2026, 11, 7)));
+        assertEquals(Color.RED, m.uuidToColor.get(ID));
+    }
+
+    @Test
+    @DisplayName("Null values at any nesting level are consumed, not left in the stream")
+    void processor_nested_map_nulls() {
+        NestedValueMaps m = adapter().readValue(
+                "{\"nested\":{\"a\":null,\"b\":{\"x\":null}},"
+                        + "\"lists\":{\"k\":[\"a\",null,\"b\"],\"n\":null},"
+                        + "\"colors\":{\"c\":null},"
+                        + "\"byDate\":{\"2026-11-07\":null},"
+                        + "\"sets\":{\"s\":[1]}}", NestedValueMaps.class);
+
+        assertTrue(m.nested.containsKey("a"));
+        assertNull(m.nested.get("a"));
+        assertNull(m.nested.get("b").get("x"));
+        assertEquals(Arrays.asList("a", null, "b"), m.lists.get("k"));
+        assertNull(m.lists.get("n"));
+        assertNull(m.colors.get("c"));
+        assertNull(m.byDate.get(LocalDate.of(2026, 11, 7)));
+        assertEquals(Set.of(1), m.sets.get("s"));   // the field after the nulls still parses
+    }
+
+    @Test
+    @DisplayName("Generated writer round-trips nested values, enums, primitive arrays and core-resolver keys")
+    void processor_nested_map_round_trip() {
+        JsonAdapter adapter = adapter();
+        NestedValueMaps original = adapter.readValue(NESTED_JSON, NestedValueMaps.class);
+
+        String json = adapter.writeValue(original);
+        NestedValueMaps copy = adapter.readValue(json, NestedValueMaps.class);
+
+        assertEquals(original.nested, copy.nested);
+        assertEquals(original.lists, copy.lists);
+        assertEquals(original.sets, copy.sets);
+        assertEquals(original.colors, copy.colors);
+        assertArrayEquals(original.primitiveArrays.get("p"), copy.primitiveArrays.get("p"));
+        assertArrayEquals(original.matrices.get("m"), copy.matrices.get("m"));
+        assertEquals(original.ids, copy.ids);
+        assertEquals(original.deep, copy.deep);
+        assertEquals(7, copy.objects.get("n").i);
+        assertEquals(original.bits, copy.bits);
+        assertEquals(original.byDate, copy.byDate);
+        assertEquals(original.uuidToColor, copy.uuidToColor);
+    }
+
+    @Test
+    @DisplayName("Reflection path resolves core-resolver map keys too")
+    void reflection_core_resolver_keys() {
+        UUID id = ID;
+        Reflective r = readReflective("{\"byUuid\":{\"" + id + "\":\"found\"}}");
+        assertEquals("found", r.byUuid.get(id));
     }
 }
