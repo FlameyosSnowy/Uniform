@@ -67,6 +67,8 @@ public final class UniformJsonProcessor extends AbstractProcessor {
             "java.time.Month", "java.time.ZoneId", "java.util.TimeZone"
     );
 
+    private static final ClassName JSON_STRING =
+            ClassName.get("io.github.flameyossnowy.uniform.json.dom", "JsonString");
     private static final ClassName CORE_REGISTRY =
             ClassName.get("io.github.flameyossnowy.uniform.json.resolvers", "CoreTypeResolverRegistry");
     private static final ClassName CORE_RESOLVER =
@@ -779,26 +781,29 @@ public final class UniformJsonProcessor extends AbstractProcessor {
         }
 
         if (ck == CollectionKind.MAP) {
-            List<? extends TypeMirror> args   = ((DeclaredType) p.typeMirror()).getTypeArguments();
-            TypeName                   keyType = TypeName.get(args.get(0));
-            TypeName                   valType = TypeName.get(args.get(1));
+            List<? extends TypeMirror> args = ((DeclaredType) p.typeMirror()).getTypeArguments();
+            TypeMirror keyMirror = args.get(0);
+            TypeName   keyType   = TypeName.get(keyMirror);
+            TypeName   valType   = TypeName.get(args.get(1));
 
-            if (!keyType.equals(ClassName.get(String.class))) {
+            CodeBlock keyExpr = mapKeyFromString(keyMirror, "__rawKey");
+            if (keyExpr == null) {
                 processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR,
-                        "Map field '" + p.javaName() + "': only Map<String, V> is supported.", null);
+                        "Map field '" + p.javaName() + "': unsupported key type " + keyType
+                                + " (supported: String, primitives' wrappers, enums, UUID, BigInteger, BigDecimal,"
+                                + " URI, URL, Path and java.time types).", null);
                 return;
             }
 
-            ClassName concreteCursor = ClassName.get("io.github.flameyossnowy.uniform.json.parser.lowlevel", "JsonCursor");
-            ClassName linkedHashMap  = ClassName.get("java.util", "LinkedHashMap");
-            TypeName  mapType = ParameterizedTypeName.get(ClassName.get("java.util", "Map"),
-                    keyType, valType.box());
+            String declaredFqcn = elements.getBinaryName(
+                    (TypeElement) ((DeclaredType) p.typeMirror()).asElement()).toString();
 
             cb.addStatement("if (!$L.enterObjectValue()) $L = null", cursorExpr, var);
             cb.beginControlFlow("else");
-            cb.addStatement("$T __map = new $T<>()", mapType, linkedHashMap);
+            cb.addStatement("$T __map = new $T<>()", t, mapImpl(declaredFqcn));
             cb.beginControlFlow("while ($L.nextField())", cursorExpr);
-            cb.addStatement("String __key = $L.fieldNameAsString()", cursorExpr);
+            cb.addStatement("String __rawKey = $L.fieldNameAsString()", cursorExpr);
+            cb.addStatement("$T __key = $L", keyType, keyExpr);
             emitMapValueRead(cb, valType, jsonMapper, jsonMapperRegistry, cursorExpr);
             cb.endControlFlow();
             cb.addStatement("$L.finishFieldAfterValue()", cursorExpr);
@@ -1108,7 +1113,7 @@ public final class UniformJsonProcessor extends AbstractProcessor {
                 emitArrayWrite(cb, access, TypeName.get(at.getComponentType()), jsonWriterMapper, jsonMapperRegistry);
             } else if (ck == CollectionKind.MAP) {
                 List<? extends TypeMirror> args = ((DeclaredType) p.typeMirror()).getTypeArguments();
-                emitMapWrite(cb, access, TypeName.get(args.get(1)), jsonWriterMapper, jsonMapperRegistry);
+                emitMapWrite(cb, access, args.get(0), TypeName.get(args.get(1)), jsonWriterMapper, jsonMapperRegistry);
             } else if (t.equals(ClassName.get("java.util", "BitSet"))) {
                 cb.beginControlFlow("if ($L == null)", access);
                 cb.addStatement("out.writeRaw($L)", FIELD_NULL);
@@ -1261,17 +1266,25 @@ public final class UniformJsonProcessor extends AbstractProcessor {
         cb.endControlFlow();
     }
 
-    private static void emitMapWrite(CodeBlock.Builder cb, String access, TypeName valType,
-                                     ClassName jsonWriterMapper, ClassName jsonMapperRegistry) {
-        ClassName mapEntry  = ClassName.get("java.util", "Map", "Entry");
-        TypeName  entryType = ParameterizedTypeName.get(mapEntry, ClassName.get(String.class), valType.box());
+    private void emitMapWrite(CodeBlock.Builder cb, String access, TypeMirror keyMirror, TypeName valType,
+                              ClassName jsonWriterMapper, ClassName jsonMapperRegistry) {
+        TypeName keyType   = TypeName.get(keyMirror);
+        ClassName mapEntry = ClassName.get("java.util", "Map", "Entry");
+        TypeName entryType = ParameterizedTypeName.get(mapEntry, keyType, valType.box());
+
+        boolean isEnum = keyMirror.getKind() == TypeKind.DECLARED
+                && ((DeclaredType) keyMirror).asElement().getKind() == ElementKind.ENUM;
+        String keyExpr;
+        if (keyType.equals(ClassName.get(String.class))) keyExpr = "__entry.getKey()";
+        else if (isEnum)                                 keyExpr = "__entry.getKey().name()";
+        else                                             keyExpr = "String.valueOf(__entry.getKey())";
 
         cb.beginControlFlow("if ($L == null)", access);
         cb.addStatement("out.writeRaw($L)", FIELD_NULL);
         cb.nextControlFlow("else");
         cb.addStatement("out.beginObject()");
         cb.beginControlFlow("for ($T __entry : $L.entrySet())", entryType, access);
-        cb.addStatement("out.writeQuotedNameAsciiOrUtf8(__entry.getKey())");
+        cb.addStatement("out.writeQuotedNameAsciiOrUtf8($L)", keyExpr);
         emitElementWrite(cb, "__entry.getValue()", valType, jsonWriterMapper, jsonMapperRegistry, false);
         cb.endControlFlow();
         cb.addStatement("out.endObject()");
@@ -1385,6 +1398,40 @@ public final class UniformJsonProcessor extends AbstractProcessor {
         return type.isPrimitive() ? type.box() : type;
     }
 
+    private static CodeBlock mapKeyFromString(TypeMirror keyMirror, String raw) {
+        TypeName key = TypeName.get(keyMirror);
+
+        if (key.equals(ClassName.get(String.class)))  return CodeBlock.of("$L", raw);
+        if (key.equals(TypeName.INT.box()))           return CodeBlock.of("Integer.valueOf($L)", raw);
+        if (key.equals(TypeName.LONG.box()))          return CodeBlock.of("Long.valueOf($L)", raw);
+        if (key.equals(TypeName.SHORT.box()))         return CodeBlock.of("Short.valueOf($L)", raw);
+        if (key.equals(TypeName.BYTE.box()))          return CodeBlock.of("Byte.valueOf($L)", raw);
+        if (key.equals(TypeName.DOUBLE.box()))        return CodeBlock.of("Double.valueOf($L)", raw);
+        if (key.equals(TypeName.FLOAT.box()))         return CodeBlock.of("Float.valueOf($L)", raw);
+        if (key.equals(TypeName.BOOLEAN.box()))       return CodeBlock.of("Boolean.valueOf($L)", raw);
+        if (key.equals(TypeName.CHAR.box()))          return CodeBlock.of("Character.valueOf($L.charAt(0))", raw);
+
+        if (keyMirror.getKind() == TypeKind.DECLARED
+                && ((DeclaredType) keyMirror).asElement().getKind() == ElementKind.ENUM) {
+            return CodeBlock.of("$T.valueOf($L)", key, raw);
+        }
+
+        // UUID, BigInteger, BigDecimal, URI, URL, Path, java.time.*: use the core resolvers
+        if (isCoreResolved(key)) {
+            return CodeBlock.of("($T) $T.INSTANCE.resolve($T.class).deserialize(new $T($L))",
+                    key, CORE_REGISTRY, key, JSON_STRING, raw);
+        }
+        return null;
+    }
+
+    private static ClassName mapImpl(String fqcn) {
+        return switch (fqcn) {
+            case "java.util.HashMap", "java.util.TreeMap", "java.util.LinkedHashMap" -> ClassName.bestGuess(fqcn);
+            case "java.util.SortedMap", "java.util.NavigableMap" -> ClassName.get("java.util", "TreeMap");
+            default -> ClassName.get("java.util", "LinkedHashMap");
+        };
+    }
+
     private static int fnv1a(String s) {
         int h = 0x811c9dc5;
         for (int i = 0; i < s.length(); i++) {
@@ -1409,7 +1456,8 @@ public final class UniformJsonProcessor extends AbstractProcessor {
         String fqcn = elements.getBinaryName(te).toString();
         return switch (fqcn) {
             case "java.util.List",  "java.util.ArrayList"                                               -> CollectionKind.LIST;
-            case "java.util.Map",   "java.util.HashMap", "java.util.LinkedHashMap",  "java.util.TreeMap"   -> CollectionKind.MAP;
+            case "java.util.Map", "java.util.HashMap", "java.util.LinkedHashMap", "java.util.TreeMap",
+                 "java.util.SortedMap", "java.util.NavigableMap" -> CollectionKind.MAP;
             case "java.util.Set", "java.util.HashSet", "java.util.LinkedHashSet", "java.util.TreeSet",
                  "java.util.SortedSet", "java.util.NavigableSet" -> CollectionKind.SET;
             case "java.util.Queue", "java.util.Deque", "java.util.ArrayDeque", "java.util.LinkedList",

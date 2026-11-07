@@ -355,4 +355,43 @@ public class JsonCollectionsAndMapsTest {
         String written = adapter.writeValue(new Product(1024, map));
         assertEquals("{\"id\":1024,\"info\":{\"infoA\":[\"aa\",\"bb\"],\"infoB\":[\"cc\",\"dd\"]}}",written);
     }
+
+    @SerializedObject
+    public static class KeyedMaps {
+        public Map<Integer, String> byInt;
+        public Map<Long, Boolean> byLong;
+        public Map<Color, Integer> byColor;
+        public TreeMap<UUID, String> byUuid;
+        public HashMap<String, Integer> plain;
+
+        public KeyedMaps() {}
+    }
+
+    @Test
+    @DisplayName("Generated code supports non-String map keys and honors the declared map type")
+    void processor_map_key_types() {
+        UUID id = UUID.fromString("123e4567-e89b-12d3-a456-426614174000");
+        JsonAdapter adapter = adapter();
+
+        KeyedMaps m = adapter.readValue("{"
+                + "\"byInt\":{\"1\":\"x\",\"2\":\"y\"},"
+                + "\"byLong\":{\"9000000000\":true},"
+                + "\"byColor\":{\"RED\":1,\"GREEN\":2},"
+                + "\"byUuid\":{\"" + id + "\":\"found\"},"
+                + "\"plain\":{\"a\":1}"
+                + "}", KeyedMaps.class);
+
+        assertEquals(Map.of(1, "x", 2, "y"), m.byInt);
+        assertEquals(Map.of(9_000_000_000L, true), m.byLong);
+        assertEquals(Map.of(Color.RED, 1, Color.GREEN, 2), m.byColor);
+        assertEquals("found", m.byUuid.get(id));
+        assertInstanceOf(TreeMap.class, m.byUuid);
+        assertInstanceOf(HashMap.class, m.plain);
+
+        KeyedMaps copy = adapter.readValue(adapter.writeValue(m), KeyedMaps.class);
+        assertEquals(m.byInt, copy.byInt);
+        assertEquals(m.byLong, copy.byLong);
+        assertEquals(m.byColor, copy.byColor);
+        assertEquals(m.byUuid, copy.byUuid);
+    }
 }
