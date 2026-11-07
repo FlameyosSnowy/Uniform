@@ -5,7 +5,27 @@ import io.github.flameyossnowy.uniform.json.ReflectionConfig;
 import io.github.flameyossnowy.uniform.json.parser.JsonReadCursor;
 import io.github.flameyossnowy.uniform.json.parser.lowlevel.ByteSlice;
 import io.github.flameyossnowy.uniform.json.reflect.ReflectionMapperFactory;
+import org.jetbrains.annotations.Nullable;
 
+import java.lang.reflect.Array;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.LinkedList;
+import java.util.PriorityQueue;
+import java.util.Stack;
+import java.util.TreeSet;
+import java.util.Vector;
+import java.util.HashSet;
+import java.util.concurrent.ConcurrentLinkedDeque;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.ConcurrentSkipListSet;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CopyOnWriteArraySet;
+import java.util.concurrent.LinkedBlockingDeque;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.function.IntFunction;
+import java.util.function.Supplier;
 import java.util.BitSet;
 import java.util.Collection;
 import java.util.Map;
@@ -23,6 +43,15 @@ public final class JsonMapperRegistry {
 
     public static JsonConfig getActiveConfig() {
         return activeConfig;
+    }
+
+    public static Collection<Object> newCollection(Class<?> type) {
+        Supplier<Collection<Object>> factory = collectionFactory(type);
+        return factory == null ? null : factory.get();
+    }
+
+    public static Object readUntyped(JsonReadCursor cursor) {
+        return readAny(cursor);
     }
 
     private static void bootstrapIfNeeded() {
@@ -82,10 +111,12 @@ public final class JsonMapperRegistry {
         tryRegisterByName(registry, fqcn, activeConfig);
     }
 
+    @SuppressWarnings("MethodMayBeStatic")
     public <T> void registerReaderInstance(Class<T> type, JsonMapper<? extends T> mapper) {
         READERS.put(type, mapper);
     }
 
+    @SuppressWarnings("MethodMayBeStatic")
     public <T> void registerWriterInstance(Class<T> type, JsonWriterMapper<? extends T> mapper) {
         WRITERS.put(type, mapper);
     }
@@ -122,10 +153,19 @@ public final class JsonMapperRegistry {
         if (mapper != null) return mapper;
 
         if (Collection.class.isAssignableFrom(type)) {
-            return COLLECTION_READER;
+            return collectionReaderFor(type);
         }
+
         if (Map.class.isAssignableFrom(type)) {
             return MAP_READER;
+        }
+
+        if (type == BitSet.class) {
+            return BITSET_READER;
+        }
+
+        if (type.isArray()) {
+            return arrayReaderFor(type);
         }
 
         if (reflectionConfig.enabled()) {
@@ -143,6 +183,7 @@ public final class JsonMapperRegistry {
         }
         out.endArray();
     };
+
     // Writer for array
     private static final JsonWriterMapper<Object[]> ARRAY_WRITER = (out, value) -> {
         out.beginArray();
@@ -155,6 +196,7 @@ public final class JsonMapperRegistry {
         }
         out.endArray();
     };
+
     // Dynamic writers for Collection and Map types to avoid JPMS issues with internal implementations
     private static final JsonWriterMapper<Collection<?>> COLLECTION_WRITER = (out, value) -> {
         out.beginArray();
@@ -168,6 +210,15 @@ public final class JsonMapperRegistry {
         out.endArray();
     };
 
+    private static final JsonMapper<BitSet> BITSET_READER = cursor -> {
+        if (!cursor.enterArray()) return null;
+        BitSet bits = new BitSet();
+        while (cursor.nextElement()) {
+            bits.set(cursor.elementValueAsInt());
+        }
+        return bits;
+    };
+
     private static final JsonWriterMapper<Map<?, ?>> MAP_WRITER = (out, value) -> {
         out.beginObject();
         for (Map.Entry<?, ?> entry : value.entrySet()) {
@@ -179,22 +230,142 @@ public final class JsonMapperRegistry {
         out.endObject();
     };
 
-    private static final JsonMapper<Collection<?>> COLLECTION_READER = (cursor) -> {
-        JsonReadCursor arr = cursor;
+    private static final Map<Class<?>, Supplier<Collection<Object>>> COLLECTION_FACTORIES = new ConcurrentHashMap<>(32);
 
-        if (!arr.enterArray()) {
-            return null;
+    static {
+        COLLECTION_FACTORIES.put(ArrayList.class, ArrayList::new);
+        COLLECTION_FACTORIES.put(LinkedList.class, LinkedList::new);
+        COLLECTION_FACTORIES.put(Vector.class, Vector::new);
+        COLLECTION_FACTORIES.put(Stack.class, Stack::new);
+        COLLECTION_FACTORIES.put(CopyOnWriteArrayList.class, CopyOnWriteArrayList::new);
+        COLLECTION_FACTORIES.put(HashSet.class, HashSet::new);
+        COLLECTION_FACTORIES.put(LinkedHashSet.class, LinkedHashSet::new);
+        COLLECTION_FACTORIES.put(TreeSet.class, TreeSet::new);
+        COLLECTION_FACTORIES.put(CopyOnWriteArraySet.class, CopyOnWriteArraySet::new);
+        COLLECTION_FACTORIES.put(ConcurrentSkipListSet.class, ConcurrentSkipListSet::new);
+        COLLECTION_FACTORIES.put(ArrayDeque.class, ArrayDeque::new);
+        COLLECTION_FACTORIES.put(PriorityQueue.class, PriorityQueue::new);
+        COLLECTION_FACTORIES.put(ConcurrentLinkedQueue.class, ConcurrentLinkedQueue::new);
+        COLLECTION_FACTORIES.put(ConcurrentLinkedDeque.class, ConcurrentLinkedDeque::new);
+        COLLECTION_FACTORIES.put(LinkedBlockingQueue.class, LinkedBlockingQueue::new);
+        COLLECTION_FACTORIES.put(LinkedBlockingDeque.class, LinkedBlockingDeque::new);
+    }
+
+     public static <C extends Collection<?>> void registerCollectionFactory(Class<C> type, Supplier<? extends C> factory) {
+        COLLECTION_FACTORIES.put(type, (Supplier<Collection<Object>>) factory);
+        COLLECTION_READERS.remove(type);
+    }
+
+    private static final Map<Class<?>, JsonMapper<?>> ARRAY_READERS = new ConcurrentHashMap<>(16);
+
+    private static JsonMapper<?> arrayReaderFor(Class<?> arrayType) {
+        return ARRAY_READERS.computeIfAbsent(arrayType, t -> {
+            final Class<?> component = t.getComponentType();
+            return (JsonMapper<Object>) cursor -> {
+                if (!cursor.enterArray()) return null;
+                java.util.List<Object> list = new ArrayList<>(32);
+                while (cursor.nextElement()) {
+                    list.add(readAny(cursor.elementValueCursor()));
+                }
+                return toTypedArray(list, component);
+            };
+        });
+    }
+
+    private static Object toTypedArray(java.util.List<?> list, Class<?> component) {
+        Object array = newArray(component, list.size());
+        for (int i = 0; i < list.size(); i++) {
+            Object v = list.get(i);
+            if (component.isArray() && v instanceof java.util.List<?> nested) {
+                v = toTypedArray(nested, component.getComponentType());
+            } else if (v instanceof Number n) {
+                v = coerceNumber(n, component);
+            }
+            if (v != null || !component.isPrimitive()) {
+                Array.set(array, i, v);
+            }
         }
+        return array;
+    }
 
-        java.util.List<Object> list = new java.util.ArrayList<>();
+    private static Object coerceNumber(Number n, Class<?> target) {
+        if (target == int.class    || target == Integer.class) return n.intValue();
+        if (target == long.class   || target == Long.class)    return n.longValue();
+        if (target == short.class  || target == Short.class)   return n.shortValue();
+        if (target == byte.class   || target == Byte.class)    return n.byteValue();
+        if (target == float.class  || target == Float.class)   return n.floatValue();
+        if (target == double.class || target == Double.class)  return n.doubleValue();
+        return n;
+    }
 
-        while (arr.nextElement()) {
-            Object value = readAny(arr.elementValueCursor());
-            list.add(value);
-        }
+    private static final Map<Class<?>, IntFunction<Object>> ARRAY_FACTORIES = new ConcurrentHashMap<>(32);
 
-        return list;
-    };
+    static {
+        ARRAY_FACTORIES.put(String.class,     String[]::new);
+        ARRAY_FACTORIES.put(Integer.class,    Integer[]::new);
+        ARRAY_FACTORIES.put(Long.class,       Long[]::new);
+        ARRAY_FACTORIES.put(Double.class,     Double[]::new);
+        ARRAY_FACTORIES.put(Float.class,      Float[]::new);
+        ARRAY_FACTORIES.put(Short.class,      Short[]::new);
+        ARRAY_FACTORIES.put(Byte.class,       Byte[]::new);
+        ARRAY_FACTORIES.put(Boolean.class,    Boolean[]::new);
+        ARRAY_FACTORIES.put(Character.class,  Character[]::new);
+        ARRAY_FACTORIES.put(Object.class,     Object[]::new);
+        ARRAY_FACTORIES.put(int.class,        int[]::new);
+        ARRAY_FACTORIES.put(long.class,       long[]::new);
+        ARRAY_FACTORIES.put(double.class,     double[]::new);
+        ARRAY_FACTORIES.put(float.class,      float[]::new);
+        ARRAY_FACTORIES.put(short.class,      short[]::new);
+        ARRAY_FACTORIES.put(byte.class,       byte[]::new);
+        ARRAY_FACTORIES.put(boolean.class,    boolean[]::new);
+        ARRAY_FACTORIES.put(char.class,       char[]::new);
+        ARRAY_FACTORIES.put(String[].class,   String[][]::new);
+        ARRAY_FACTORIES.put(int[].class,      int[][]::new);
+    }
+
+    @SuppressWarnings({"unchecked", "unused"})
+    public static <T> void registerArrayFactory(Class<T> component, IntFunction<T[]> factory) {
+        ARRAY_FACTORIES.put(component, (IntFunction<Object>) (IntFunction<?>) factory);
+    }
+
+    private static Object newArray(Class<?> component, int size) {
+        IntFunction<Object> factory = ARRAY_FACTORIES.get(component);
+        if (factory != null) return factory.apply(size);
+        return Array.newInstance(component, size);
+    }
+
+    private static final Map<Class<?>, JsonMapper<?>> COLLECTION_READERS = new ConcurrentHashMap<>(16);
+
+    private static @Nullable JsonMapper<?> collectionReaderFor(Class<?> type) {
+        JsonMapper<?> cached = COLLECTION_READERS.get(type);
+        if (cached != null) return cached;
+
+        Supplier<Collection<Object>> factory = collectionFactory(type);
+        if (factory == null) return null;
+
+        JsonMapper<Collection<Object>> reader = cursor -> {
+            if (!cursor.enterArray()) return null;
+            Collection<Object> out = factory.get();
+            while (cursor.nextElement()) {
+                out.add(readAny(cursor.elementValueCursor()));
+            }
+            return out;
+        };
+        COLLECTION_READERS.put(type, reader);
+        return reader;
+    }
+
+    private static Supplier<Collection<Object>> collectionFactory(Class<?> type) {
+        Supplier<Collection<Object>> exact = COLLECTION_FACTORIES.get(type);
+        if (exact != null) return exact;
+
+        if (type.isAssignableFrom(ArrayList.class))           return ArrayList::new;
+        if (type.isAssignableFrom(LinkedHashSet.class))       return LinkedHashSet::new;
+        if (type.isAssignableFrom(TreeSet.class))             return TreeSet::new;
+        if (type.isAssignableFrom(LinkedList.class))          return LinkedList::new;
+        if (type.isAssignableFrom(LinkedBlockingDeque.class)) return LinkedBlockingDeque::new;
+        return null;
+    }
 
     private static final JsonMapper<Map<?, ?>> MAP_READER = (cursor) -> {
         JsonReadCursor obj = cursor;
