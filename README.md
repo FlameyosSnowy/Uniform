@@ -86,7 +86,7 @@ application {
 <dependency>
     <groupId>io.github.flameyossnowy.uniform</groupId>
     <artifactId>json</artifactId>
-    <version>1.5.5</version>
+    <version>1.5.13</version>
 </dependency>
 
 <plugin>
@@ -97,7 +97,7 @@ application {
             <path>
                 <groupId>io.github.flameyossnowy.uniform</groupId>
                 <artifactId>annotation-processor</artifactId>
-                <version>1.5.5</version>
+                <version>1.5.13</version>
             </path>
         </annotationProcessorPaths>
         <compilerArgs>
@@ -142,7 +142,6 @@ public record Product(int id, String name, double price, boolean available) {}
 ### 2. Create an adapter
 
 ```java
-// Default config - strict JSON, no extra features
 JsonAdapter<Product> adapter = new JsonAdapter<>(JsonConfig.defaults());
 
 // Or build a custom config
