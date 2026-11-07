@@ -204,8 +204,6 @@ public final class JsonMapperRegistry {
     };
 
     private static Object readAny(JsonReadCursor cursor) {
-        // Peek at first non-whitespace char to determine type
-        // Both elementValue() and fieldValue() now work on sub-cursors
         ByteSlice raw = cursor.elementValue();
         if (raw.length() == 0) {
             raw = cursor.fieldValue();
