@@ -54,14 +54,14 @@ All benchmarks run with JMH in throughput mode (`ops/ms`, higher is better) on J
 
 ## Installation
 
-> Requires Java 21+ and `--add-modules jdk.incubator.vector`.
+> Requires Java 25+ and `--add-modules jdk.incubator.vector`.
 
 ### Gradle (Kotlin DSL)
 
 ```kotlin
 dependencies {
-    implementation("io.github.flameyossnowy.uniform:json:1.5.13")
-    annotationProcessor("io.github.flameyossnowy.uniform:annotation-processor:1.5.13")
+    implementation("io.github.flameyossnowy.uniform:json:1.5.14")
+    annotationProcessor("io.github.flameyossnowy.uniform:annotation-processor:1.5.14")
 }
 
 tasks.withType<JavaCompile> {
@@ -84,7 +84,7 @@ application {
 <dependency>
     <groupId>io.github.flameyossnowy.uniform</groupId>
     <artifactId>json</artifactId>
-    <version>1.5.13</version>
+    <version>1.5.14</version>
 </dependency>
 
 <plugin>
@@ -95,7 +95,7 @@ application {
             <path>
                 <groupId>io.github.flameyossnowy.uniform</groupId>
                 <artifactId>annotation-processor</artifactId>
-                <version>1.5.13</version>
+                <version>1.5.14</version>
             </path>
         </annotationProcessorPaths>
         <compilerArgs>
