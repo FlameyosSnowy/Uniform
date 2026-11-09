@@ -1,8 +1,6 @@
 # Uniform
 
-**High-performance JSON serialization for Java 25, powered by SIMD-accelerated parsing and compile-time code generation.**
-
-Uniform is inspired by Jackson and simdjson but takes a different approach: instead of reflection at runtime, it generates specialized reader/writer classes at compile time via an annotation processor. The result is allocation-free hot paths, zero reflection overhead, and throughput that beats Jackson by up to **3.57×** on writes and **1.9×** on reads.
+**High-performance JSON serialization for Java 25, powered by efficient parsing and compile-time code generation.**
 
 ```java
 @SerializedObject
@@ -12,7 +10,7 @@ public class User {
     public String email;
 }
 
-JsonAdapter<User> adapter = new JsonAdapter<>(User.class, JsonConfig.defaults());
+JsonAdapter adapter = new JsonAdapter<>(JsonAdapter.configBuilder().build());
 
 User user = adapter.readValue("{\"id\":1,\"name\":\"Jane\",\"email\":\"jane@example.com\"}");
 String json = adapter.writeValue(user); // {"id":1,"name":"Jane","email":"jane@example.com"}
@@ -36,7 +34,7 @@ All benchmarks run with JMH in throughput mode (`ops/ms`, higher is better) on J
 | Write - Complex | **5,111**  | 2,971   | -              | 1,286 |
 | Pretty-print    | **1,027**  | 338     | -              | 227   |
 
-¹ [simdjson-java](https://github.com/simdjson/simdjson-java) is the official Java port of simdjson - it is a pure parser with no write path.
+¹ [simdjson-java](https://github.com/simdjson/simdjson-java) is the official Java port of simdjson; it is a pure parser with no write path.
 
 ---
 
@@ -56,7 +54,7 @@ All benchmarks run with JMH in throughput mode (`ops/ms`, higher is better) on J
 
 ## Installation
 
-> Requires Java 21+. SIMD acceleration requires `--add-modules jdk.incubator.vector`.
+> Requires Java 21+ and `--add-modules jdk.incubator.vector`.
 
 ### Gradle (Kotlin DSL)
 
@@ -265,35 +263,6 @@ JsonConfig config = new JsonConfig(
 );
 ```
 
----
-
-## How it works
-
-```
-Your POJO  annotationprocessor ──▶   MyPojo_JsonReader.java
-                                      MyPojo_JsonWriter.java
-                                      MyPojo_JsonModule.java
-                                           │
-                        ┌──────────────────▼──────────────────┐
-                        │         JsonMapperRegistry          │
-                        │   (ServiceLoader + static maps)     │
-                        └──────────────────┬──────────────────┘
-                                           │
-                        ┌──────────────────▼───────────────────┐
-                        │           JsonAdapter<T>             │
-                        │  readValue()  ──▶  JsonCursor       │
-                        │                    (SIMD scan)       │
-                        │  writeValue() ──▶  JsonStringWriter │
-                        │                    (Create buffer)   │
-                        └──────────────────────────────────────┘
-```
-
-**Read path:** `VectorByteScanner` makes one SIMD pass over the input to build structural and quote bitmasks. `JsonCursor` walks those bitmasks with `Long.numberOfTrailingZeros` dispatch - no byte-by-byte scanning in the hot path. The generated reader dispatches on FNV-1a field name hashes via a `switch` statement.
-
-**Write path:** `JsonStringWriter` creates a new `StringBuilder`. String escaping uses a 256-entry lookup table for the fast path. The generated writer calls `out.nameAscii()` / `out.value()` directly with no intermediate representation.
-
----
-
 ## Contributing
 
 Contributions are welcome. Please open an issue before starting work on a large change so we can discuss direction first.
@@ -321,14 +290,6 @@ cd Uniform
 # Pretty-print only
 ./gradlew :json:jmhPrettyPrint
 ```
-
-**Guidelines:**
-- Keep the hot path allocation-free - verify with `-XX:+PrintCompilation` or async-profiler before submitting
-- New collection types or read/write features must include both a smoke test and a round-trip test
-- Processor changes must regenerate cleanly under incremental compilation (`./gradlew clean build`)
-- Match the existing code style - no Lombok, no extra dependencies in `core` or `json`
-
----
 
 ## License
 
