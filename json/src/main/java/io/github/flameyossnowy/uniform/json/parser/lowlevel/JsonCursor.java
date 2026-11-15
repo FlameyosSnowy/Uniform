@@ -274,6 +274,7 @@ public final class JsonCursor implements JsonReadCursor {
      * Advance into a nested object that is the current element's value, in-place.
      * Mirrors {@link #enterObjectValue()} for the array-element context.
      */
+    @Override
     public boolean enterObjectElement() {
         return enterElement(TOK_OBJ_OPEN);
     }
@@ -311,7 +312,7 @@ public final class JsonCursor implements JsonReadCursor {
         if (pos < limit && TOKEN[input[pos] & 0xFF] == TOK_COMMA) pos++;
     }
 
-    /** Mirrors finishFieldAfterValue() for the array-element context. */
+    @Override
     public void finishElementAfterValue() {
         skipWs();
         if (pos < limit && TOKEN[input[pos] & 0xFF] == TOK_COMMA) pos++;

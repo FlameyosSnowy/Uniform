@@ -3,6 +3,7 @@ package io.github.flameyossnowy.uniform.json.reflect;
 import io.github.flameyossnowy.uniform.core.resolvers.ContextDynamicTypeSupplier;
 import io.github.flameyossnowy.uniform.core.resolvers.ResolutionContext;
 import io.github.flameyossnowy.uniform.core.resolvers.ResolverRegistry;
+import io.github.flameyossnowy.uniform.json.JsonAdapter;
 import io.github.flameyossnowy.uniform.json.dom.JsonValue;
 import io.github.flameyossnowy.uniform.json.exceptions.JsonException;
 import io.github.flameyossnowy.uniform.json.mappers.JsonMapper;
@@ -13,8 +14,6 @@ import io.github.flameyossnowy.uniform.json.resolvers.CoreTypeResolver;
 import io.github.flameyossnowy.uniform.json.resolvers.CoreTypeResolverRegistry;
 
 import java.lang.reflect.*;
-import java.math.BigDecimal;
-import java.math.BigInteger;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -25,7 +24,7 @@ public final class ReflectionReadDelegate {
     /** Where the value we are about to read sits: an object field or an array element. */
     private enum Slot { FIELD, ELEMENT }
 
-    public static Object read(ReflectionMetadata meta, JsonReadCursor cursor) {
+    public static Object read(JsonAdapter adapter, ReflectionMetadata meta, JsonReadCursor cursor) {
         List<ReflectionMetadata.Property> props = meta.properties;
         int count = props.size();
 
@@ -47,13 +46,13 @@ public final class ReflectionReadDelegate {
             }
             ReflectionMetadata.Property prop = props.get(idx);
             Type generic = prop.genericType() != null ? prop.genericType() : prop.type();
-            values[idx] = readValue(cursor, Slot.FIELD, generic, prop, prop.owner());
+            values[idx] = readValue(adapter, cursor, Slot.FIELD, generic, prop, prop.owner());
         }
 
         return instantiate(meta, values);
     }
 
-    private static Object readValue(JsonReadCursor cursor, Slot slot, Type genericType,
+    private static Object readValue(JsonAdapter adapter, JsonReadCursor cursor, Slot slot, Type genericType,
                                     ReflectionMetadata.Property prop, Class<?> owner) {
         Class<?> type = rawClass(genericType);
 
@@ -67,7 +66,7 @@ public final class ReflectionReadDelegate {
             };
             Class<?> runtimeType = supplier.supply(ctx);
             if (runtimeType != null && runtimeType != type) {
-                return readValue(cursor, slot, runtimeType, prop, owner);
+                return readValue(adapter, cursor, slot, runtimeType, prop, owner);
             }
         }
 
@@ -77,7 +76,7 @@ public final class ReflectionReadDelegate {
         }
 
         if (type == Object.class) {
-            return JsonMapperRegistry.readUntyped(subCursor(cursor, slot));
+            return JsonMapperRegistry.readUntyped(adapter, subCursor(cursor, slot));
         }
 
         if (type == String.class || type == CharSequence.class) return slot == Slot.FIELD ? cursor.fieldValueAsUnquotedString() : cursor.elementValueAsUnquotedString();
@@ -104,15 +103,15 @@ public final class ReflectionReadDelegate {
         if (type.isArray()) {
             Type component = genericType instanceof GenericArrayType ga
                     ? ga.getGenericComponentType() : type.getComponentType();
-            return readArray(cursor, slot, component, owner);
+            return readArray(adapter, cursor, slot, component, owner);
         }
 
         if (Collection.class.isAssignableFrom(type)) {
-            return readCollection(cursor, slot, type, typeArg(genericType, 0), owner);
+            return readCollection(adapter, cursor, slot, type, typeArg(genericType, 0), owner);
         }
 
         if (Map.class.isAssignableFrom(type)) {
-            return readMap(cursor, slot, type, typeArg(genericType, 0), typeArg(genericType, 1), owner);
+            return readMap(adapter, cursor, slot, type, typeArg(genericType, 0), typeArg(genericType, 1), owner);
         }
 
         CoreTypeResolver<?> core = CoreTypeResolverRegistry.INSTANCE.resolve(type);
@@ -126,12 +125,12 @@ public final class ReflectionReadDelegate {
             }
         }
 
-        JsonMapper<?> nested = JsonMapperRegistry.getReader(type);
+        JsonMapper<?> nested = adapter.getReader(type);
         if (nested == null) nested = ReflectionMapperFactory.buildReader(type);
-        return nested.map(subCursor(cursor, slot));
+        return nested.map(adapter, subCursor(cursor, slot));
     }
 
-    private static Object readCollection(JsonReadCursor cursor, Slot slot, Class<?> collectionType,
+    private static Object readCollection(JsonAdapter adapter, JsonReadCursor cursor, Slot slot, Class<?> collectionType,
                                          Type elementType, Class<?> owner) {
         JsonReadCursor sub = subCursor(cursor, slot);
         if (!sub.enterArray()) return null;
@@ -142,18 +141,18 @@ public final class ReflectionReadDelegate {
                     + "; register it with JsonMapperRegistry.registerCollectionFactory");
         }
         while (sub.nextElement()) {
-            out.add(readValue(sub, Slot.ELEMENT, elementType, null, owner));
+            out.add(readValue(adapter, sub, Slot.ELEMENT, elementType, null, owner));
         }
         return out;
     }
 
-    private static Object readArray(JsonReadCursor cursor, Slot slot, Type componentType, Class<?> owner) {
+    private static Object readArray(JsonAdapter adapter, JsonReadCursor cursor, Slot slot, Type componentType, Class<?> owner) {
         JsonReadCursor sub = subCursor(cursor, slot);
         if (!sub.enterArray()) return null;
 
         List<Object> tmp = new ArrayList<>();
         while (sub.nextElement()) {
-            tmp.add(readValue(sub, Slot.ELEMENT, componentType, null, owner));
+            tmp.add(readValue(adapter, sub, Slot.ELEMENT, componentType, null, owner));
         }
 
         Object array = Array.newInstance(rawClass(componentType), tmp.size());
@@ -161,7 +160,7 @@ public final class ReflectionReadDelegate {
         return array;
     }
 
-    private static Object readMap(JsonReadCursor cursor, Slot slot, Class<?> mapType,
+    private static Object readMap(JsonAdapter adapter, JsonReadCursor cursor, Slot slot, Class<?> mapType,
                                   Type keyType, Type valueType, Class<?> owner) {
         JsonReadCursor sub = subCursor(cursor, slot);
         if (!sub.enterObject()) return null;
@@ -170,7 +169,7 @@ public final class ReflectionReadDelegate {
         Map<Object, Object> map = newMap(mapType);
         while (sub.nextField()) {
             Object key = convertMapKey(sub.fieldNameAsString(), keyClass);
-            map.put(key, readValue(sub, Slot.FIELD, valueType, null, owner));
+            map.put(key, readValue(adapter, sub, Slot.FIELD, valueType, null, owner));
         }
         return map;
     }

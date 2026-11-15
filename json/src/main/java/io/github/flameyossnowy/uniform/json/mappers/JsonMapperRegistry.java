@@ -1,5 +1,6 @@
 package io.github.flameyossnowy.uniform.json.mappers;
 
+import io.github.flameyossnowy.uniform.json.JsonAdapter;
 import io.github.flameyossnowy.uniform.json.JsonConfig;
 import io.github.flameyossnowy.uniform.json.ReflectionConfig;
 import io.github.flameyossnowy.uniform.json.dom.JsonString;
@@ -39,14 +40,28 @@ import java.util.concurrent.ConcurrentHashMap;
 public final class JsonMapperRegistry {
     private static final Map<Class<?>, JsonMapper<?>>       READERS = new ConcurrentHashMap<>(64);
     private static final Map<Class<?>, JsonWriterMapper<?>> WRITERS = new ConcurrentHashMap<>(64);
+    private static final java.util.Set<Class<?>> REFLECTION_READERS = ConcurrentHashMap.newKeySet();
+    private static final java.util.Set<Class<?>> REFLECTION_WRITERS = ConcurrentHashMap.newKeySet();
 
-    private static volatile boolean    bootstrapped   = false;
-    private static volatile JsonConfig activeConfig   = null;
+    private final JsonConfig activeConfig;
+    private final ReflectionConfig reflectionConfig;
 
-    private JsonMapperRegistry() {}
+    // Bootstrap state belongs to this registry because module registration receives
+    // this registry and its configuration. The mapper tables themselves remain global.
+    private volatile boolean bootstrapped;
+    private volatile boolean generatedModulesAttempted;
 
-    public static JsonConfig getActiveConfig() {
+    public JsonMapperRegistry(JsonConfig activeConfig) {
+        this.activeConfig = java.util.Objects.requireNonNull(activeConfig, "activeConfig");
+        this.reflectionConfig = activeConfig.reflectionConfig();
+    }
+
+    public JsonConfig getActiveConfig() {
         return activeConfig;
+    }
+
+    public ReflectionConfig getReflectionConfig() {
+        return reflectionConfig;
     }
 
     public static Collection<Object> newCollection(Class<?> type) {
@@ -54,107 +69,100 @@ public final class JsonMapperRegistry {
         return factory == null ? null : factory.get();
     }
 
-    public static Object readUntyped(JsonReadCursor cursor) {
-        return readAny(cursor);
+    public static Object readUntyped(JsonAdapter adapter, JsonReadCursor cursor) {
+        return readAny(adapter, cursor);
     }
 
-    private static void bootstrapIfNeeded() {
+    private void bootstrapIfNeeded() {
         if (bootstrapped) return;
-        // Caller must hold lock on JsonMapperRegistry.class
-        JsonMapperRegistry registry = new JsonMapperRegistry();
-        JsonConfig cfg = activeConfig; // may be null if bootstrapped without config
 
-        boolean loadedAny = false;
-        for (JsonMapperModule module : ServiceLoader.load(JsonMapperModule.class)) {
-            if (cfg != null) {
-                module.register(registry, cfg);
-            } else {
-                module.register(registry);
+        synchronized (this) {
+            if (bootstrapped) return;
+
+            for (JsonMapperModule module : ServiceLoader.load(JsonMapperModule.class)) {
+                module.register(this);
             }
-            loadedAny = true;
-        }
 
-        if (!loadedAny) {
-            String override = System.getProperty("uniform.generatedModule");
-            if (override != null && !override.isBlank()) {
-                tryRegisterByName(registry, "io.github.flameyossnowy.uniform.generated." + override.trim(), cfg);
-            }
-            tryRegisterByName(registry, "io.github.flameyossnowy.uniform.generated.UniformGeneratedJsonModule", cfg);
-            tryRegisterByName(registry, "io.github.flameyossnowy.uniform.generated.UniformGeneratedJsonModuleJmh", cfg);
+            bootstrapped = true;
         }
-
-        bootstrapped = true;
-    }
-
-    private static void propagateConfigToModules(JsonMapperRegistry registry, JsonConfig config) {
-        for (JsonMapperModule module : ServiceLoader.load(JsonMapperModule.class)) {
-            module.register(registry, config);
-        }
-        String override = System.getProperty("uniform.generatedModule");
-        if (override != null && !override.isBlank()) {
-            tryRegisterByName(registry, "io.github.flameyossnowy.uniform.generated." + override.trim(), config);
-        }
-        tryRegisterByName(registry, "io.github.flameyossnowy.uniform.generated.UniformGeneratedJsonModule", config);
-        tryRegisterByName(registry, "io.github.flameyossnowy.uniform.generated.UniformGeneratedJsonModuleJmh", config);
-    }
-
-    private static void tryRegisterByName(JsonMapperRegistry registry, String fqcn, JsonConfig config) {
-        try {
-            Class<?> clazz = Class.forName(fqcn);
-            if (!JsonMapperModule.class.isAssignableFrom(clazz)) return;
-            JsonMapperModule module = (JsonMapperModule) clazz.getDeclaredConstructor().newInstance();
-            if (config != null) {
-                module.register(registry, config);
-            } else {
-                module.register(registry);
-            }
-        } catch (Throwable ignored) {}
     }
 
     private static void tryRegisterByName(JsonMapperRegistry registry, String fqcn) {
-        tryRegisterByName(registry, fqcn, activeConfig);
+        try {
+            Class<?> clazz = Class.forName(fqcn);
+            if (!JsonMapperModule.class.isAssignableFrom(clazz)) return;
+
+            JsonMapperModule module = (JsonMapperModule) clazz.getDeclaredConstructor().newInstance();
+            module.register(registry);
+        } catch (Throwable ignored) {}
     }
 
     @SuppressWarnings("MethodMayBeStatic")
     public <T> void registerReaderInstance(Class<T> type, JsonMapper<? extends T> mapper) {
         READERS.put(type, mapper);
+        REFLECTION_READERS.remove(type);
     }
 
     @SuppressWarnings("MethodMayBeStatic")
     public <T> void registerWriterInstance(Class<T> type, JsonWriterMapper<? extends T> mapper) {
         WRITERS.put(type, mapper);
+        REFLECTION_WRITERS.remove(type);
     }
 
     public static <T> void registerReader(Class<T> type, JsonMapper<? extends T> mapper) {
         READERS.put(type, mapper);
+        REFLECTION_READERS.remove(type);
+    }
+
+    @SuppressWarnings("unchecked")
+    public static <T> JsonMapper<T> registerReflectionReader(Class<T> type, JsonMapper<T> mapper) {
+        JsonMapper<?> existing = READERS.putIfAbsent(type, mapper);
+        if (existing != null) {
+            return (JsonMapper<T>) existing;
+        }
+
+        REFLECTION_READERS.add(type);
+        if (READERS.get(type) != mapper) {
+            REFLECTION_READERS.remove(type);
+            return (JsonMapper<T>) READERS.get(type);
+        }
+        return mapper;
     }
 
     public static <T> void registerWriter(Class<T> type, JsonWriterMapper<? extends T> mapper) {
         WRITERS.put(type, mapper);
+        REFLECTION_WRITERS.remove(type);
     }
 
-    private static volatile ReflectionConfig reflectionConfig = ReflectionConfig.DEFAULT;
-
-    public static void applyConfig(JsonConfig config) {
-        if (config == null) return;
-        synchronized (JsonMapperRegistry.class) {
-            activeConfig      = config;
-            reflectionConfig  = config.reflectionConfig();
-            bootstrapIfNeeded();
-            propagateConfigToModules(new JsonMapperRegistry(), config);
+    @SuppressWarnings("unchecked")
+    public static <T> JsonWriterMapper<T> registerReflectionWriter(Class<T> type, JsonWriterMapper<T> mapper) {
+        JsonWriterMapper<?> existing = WRITERS.putIfAbsent(type, mapper);
+        if (existing != null) {
+            return (JsonWriterMapper<T>) existing;
         }
+
+        REFLECTION_WRITERS.add(type);
+        if (WRITERS.get(type) != mapper) {
+            REFLECTION_WRITERS.remove(type);
+            return (JsonWriterMapper<T>) WRITERS.get(type);
+        }
+        return mapper;
     }
 
-    public static JsonMapper<?> getReader(Class<?> type) {
+    public JsonMapper<?> getReader(Class<?> type) {
         bootstrapIfNeededUnsafe();
 
         JsonMapper<?> mapper = READERS.get(type);
-        if (mapper != null) return mapper;
+        if (mapper != null && (!REFLECTION_READERS.contains(type) || reflectionConfig.enabled())) {
+            return mapper;
+        }
 
         tryLoadMissingGeneratedModules();
 
         mapper = READERS.get(type);
-        if (mapper != null) return mapper;
+        if (mapper != null && (!REFLECTION_READERS.contains(type) || reflectionConfig.enabled())) {
+            return mapper;
+        }
 
         if (Collection.class.isAssignableFrom(type)) {
             return collectionReaderFor(type);
@@ -180,7 +188,7 @@ public final class JsonMapperRegistry {
     }
 
     // Writer for BitSet (not a Collection, needs special handling)
-    private static final JsonWriterMapper<BitSet> BITSET_WRITER = (out, value) -> {
+    private static final JsonWriterMapper<BitSet> BITSET_WRITER = (adapter, out, value) -> {
         out.beginArray();
         for (int i = value.nextSetBit(0); i >= 0; i = value.nextSetBit(i + 1)) {
             out.value(i);
@@ -188,32 +196,32 @@ public final class JsonMapperRegistry {
         out.endArray();
     };
 
-    // Writer for array
-    private static final JsonWriterMapper<Object> ARRAY_WRITER = (out, value) -> {
+    // These fallback writers preserve the adapter through nested values.
+    private final JsonWriterMapper<Object> arrayWriter = (adapter, out, value) -> {
         out.beginArray();
         final int n = Array.getLength(value);
         for (int i = 0; i < n; i++) {
             Object elem = Array.get(value, i);
             if (elem == null) out.nullValue();
-            else writeElement(out, elem);
+            else writeElement(adapter, out, elem);
         }
         out.endArray();
     };
 
-    // Dynamic writers for Collection and Map types to avoid JPMS issues with internal implementations
-    private static final JsonWriterMapper<Collection<?>> COLLECTION_WRITER = (out, value) -> {
+    // Dynamic writers avoid JPMS issues with internal collection implementations.
+    private final JsonWriterMapper<Collection<?>> collectionWriter = (adapter, out, value) -> {
         out.beginArray();
         for (Object elem : value) {
             if (elem == null) {
                 out.nullValue();
             } else {
-                writeElement(out, elem);
+                writeElement(adapter, out, elem);
             }
         }
         out.endArray();
     };
 
-    private static final JsonMapper<BitSet> BITSET_READER = cursor -> {
+    private static final JsonMapper<BitSet> BITSET_READER = (adapter, cursor) -> {
         if (!cursor.enterArray()) return null;
         BitSet bits = new BitSet();
         while (cursor.nextElement()) {
@@ -222,13 +230,13 @@ public final class JsonMapperRegistry {
         return bits;
     };
 
-    private static final JsonWriterMapper<Map<?, ?>> MAP_WRITER = (out, value) -> {
+    private final JsonWriterMapper<Map<?, ?>> mapWriter = (adapter, out, value) -> {
         out.beginObject();
         for (Map.Entry<?, ?> entry : value.entrySet()) {
             out.name(writeMapKey(entry.getKey()));
             Object v = entry.getValue();
             if (v == null) out.nullValue();
-            else writeElement(out, v);
+            else writeElement(adapter, out, v);
         }
         out.endObject();
     };
@@ -254,7 +262,7 @@ public final class JsonMapperRegistry {
         COLLECTION_FACTORIES.put(LinkedBlockingDeque.class, LinkedBlockingDeque::new);
     }
 
-     public static <C extends Collection<?>> void registerCollectionFactory(Class<C> type, Supplier<? extends C> factory) {
+    public static <C extends Collection<?>> void registerCollectionFactory(Class<C> type, Supplier<? extends C> factory) {
         COLLECTION_FACTORIES.put(type, (Supplier<Collection<Object>>) factory);
         COLLECTION_READERS.remove(type);
     }
@@ -264,11 +272,11 @@ public final class JsonMapperRegistry {
     private static JsonMapper<?> arrayReaderFor(Class<?> arrayType) {
         return ARRAY_READERS.computeIfAbsent(arrayType, t -> {
             final Class<?> component = t.getComponentType();
-            return (JsonMapper<Object>) cursor -> {
+            return (JsonMapper<Object>) (adapter, cursor) -> {
                 if (!cursor.enterArray()) return null;
                 java.util.List<Object> list = new ArrayList<>(32);
                 while (cursor.nextElement()) {
-                    list.add(readAny(cursor.elementValueCursor()));
+                    list.add(readAny(adapter, cursor.elementValueCursor()));
                 }
                 return toTypedArray(list, component);
             };
@@ -346,11 +354,11 @@ public final class JsonMapperRegistry {
         Supplier<Collection<Object>> factory = collectionFactory(type);
         if (factory == null) return null;
 
-        JsonMapper<Collection<Object>> reader = cursor -> {
+        JsonMapper<Collection<Object>> reader = (adapter, cursor) -> {
             if (!cursor.enterArray()) return null;
             Collection<Object> out = factory.get();
             while (cursor.nextElement()) {
-                out.add(readAny(cursor.elementValueCursor()));
+                out.add(readAny(adapter, cursor.elementValueCursor()));
             }
             return out;
         };
@@ -370,7 +378,7 @@ public final class JsonMapperRegistry {
         return null;
     }
 
-    private static final JsonMapper<Map<?, ?>> MAP_READER = (cursor) -> {
+    private static final JsonMapper<Map<?, ?>> MAP_READER = (adapter, cursor) -> {
         JsonReadCursor obj = cursor;
 
         if (!obj.enterObject()) {
@@ -381,14 +389,14 @@ public final class JsonMapperRegistry {
 
         while (obj.nextField()) {
             String key = obj.fieldNameAsString();
-            Object value = readAny(obj.fieldValueCursor());
+            Object value = readAny(adapter, obj.fieldValueCursor());
             map.put(key, value);
         }
 
         return map;
     };
 
-    private static Object readAny(JsonReadCursor cursor) {
+    private static Object readAny(JsonAdapter adapter, JsonReadCursor cursor) {
         ByteSlice raw = cursor.elementValue();
         if (raw.length() == 0) {
             raw = cursor.fieldValue();
@@ -406,7 +414,7 @@ public final class JsonMapperRegistry {
                 Map<String, Object> map = new java.util.HashMap<>();
                 while (cursor.nextField()) {
                     String key = cursor.fieldNameAsString();
-                    Object value = readAny(cursor.fieldValueCursor());
+                    Object value = readAny(adapter, cursor.fieldValueCursor());
                     map.put(key, value);
                 }
                 return map;
@@ -419,7 +427,7 @@ public final class JsonMapperRegistry {
             if (cursor.enterArray()) {
                 java.util.List<Object> list = new java.util.ArrayList<>();
                 while (cursor.nextElement()) {
-                    Object value = readAny(cursor.elementValueCursor());
+                    Object value = readAny(adapter, cursor.elementValueCursor());
                     list.add(value);
                 }
                 return list;
@@ -434,20 +442,20 @@ public final class JsonMapperRegistry {
 
         // Null
         if (raw.length() == 4 &&
-            raw.byteAt(0) == 'n' && raw.byteAt(1) == 'u' &&
-            raw.byteAt(2) == 'l' && raw.byteAt(3) == 'l') {
+                raw.byteAt(0) == 'n' && raw.byteAt(1) == 'u' &&
+                raw.byteAt(2) == 'l' && raw.byteAt(3) == 'l') {
             return null;
         }
 
         // Boolean: true/false
         if (raw.length() == 4 &&
-            raw.byteAt(0) == 't' && raw.byteAt(1) == 'r' &&
-            raw.byteAt(2) == 'u' && raw.byteAt(3) == 'e') {
+                raw.byteAt(0) == 't' && raw.byteAt(1) == 'r' &&
+                raw.byteAt(2) == 'u' && raw.byteAt(3) == 'e') {
             return Boolean.TRUE;
         }
         if (raw.length() == 5 &&
-            raw.byteAt(0) == 'f' && raw.byteAt(1) == 'a' &&
-            raw.byteAt(2) == 'l' && raw.byteAt(3) == 's' && raw.byteAt(4) == 'e') {
+                raw.byteAt(0) == 'f' && raw.byteAt(1) == 'a' &&
+                raw.byteAt(2) == 'l' && raw.byteAt(3) == 's' && raw.byteAt(4) == 'e') {
             return Boolean.FALSE;
         }
 
@@ -478,7 +486,7 @@ public final class JsonMapperRegistry {
         }
     }
 
-    private static void writeElement(io.github.flameyossnowy.uniform.json.writers.JsonStringWriter out, Object elem) {
+    private void writeElement(JsonAdapter adapter, io.github.flameyossnowy.uniform.json.writers.JsonStringWriter out, Object elem) {
         switch (elem) {
             case String s -> out.value(s);
             case Double d -> out.value(d);
@@ -487,14 +495,14 @@ public final class JsonMapperRegistry {
             case Character n -> out.write(n);
             case Boolean b -> out.value(b);
             case Enum<?> e -> out.value(e.name());
-            case Object o when o.getClass().isArray() -> ARRAY_WRITER.writeTo(out, o);
-            case Collection<?> col -> COLLECTION_WRITER.writeTo(out, col);
-            case Map<?, ?> map -> MAP_WRITER.writeTo(out, map);
+            case Object o when o.getClass().isArray() -> arrayWriter.writeTo(adapter, out, o);
+            case Collection<?> col -> collectionWriter.writeTo(adapter, out, col);
+            case Map<?, ?> map -> mapWriter.writeTo(adapter, out, map);
             default -> {
                 // For other types, look up a writer and use it
-                JsonWriterMapper<Object> writer = (JsonWriterMapper<Object>) getWriter(elem.getClass());
+                JsonWriterMapper<Object> writer = (JsonWriterMapper<Object>) adapter.getWriter(elem.getClass());
                 if (writer != null) {
-                    writer.writeTo(out, elem);
+                    writer.writeTo(adapter, out, elem);
                 } else {
                     out.nullValue();
                 }
@@ -502,16 +510,20 @@ public final class JsonMapperRegistry {
         }
     }
 
-    public static JsonWriterMapper<?> getWriter(Class<?> type) {
+    public JsonWriterMapper<?> getWriter(Class<?> type) {
         bootstrapIfNeededUnsafe();
         JsonWriterMapper<?> mapper = WRITERS.get(type);
-        if (mapper != null) return mapper;
+        if (mapper != null && (!REFLECTION_WRITERS.contains(type) || reflectionConfig.enabled())) {
+            return mapper;
+        }
         tryLoadMissingGeneratedModules();
         mapper = WRITERS.get(type);
-        if (mapper != null) return mapper;
+        if (mapper != null && (!REFLECTION_WRITERS.contains(type) || reflectionConfig.enabled())) {
+            return mapper;
+        }
 
         if (type.isArray()) {
-            return ARRAY_WRITER;
+            return arrayWriter;
         }
 
         // Check for specific types before Collection/Map to ensure proper handling
@@ -522,10 +534,10 @@ public final class JsonMapperRegistry {
         // This avoids JPMS issues with internal immutable collection implementations
         // Note: Queue and Deque are subclasses of Collection, so they're handled here
         if (Collection.class.isAssignableFrom(type)) {
-            return COLLECTION_WRITER;
+            return collectionWriter;
         }
         if (Map.class.isAssignableFrom(type)) {
-            return MAP_WRITER;
+            return mapWriter;
         }
 
         if (reflectionConfig.enabled()) {
@@ -535,22 +547,29 @@ public final class JsonMapperRegistry {
     }
 
     /** Fast unsynchronized check for the read/write hot path. */
-    private static void bootstrapIfNeededUnsafe() {
+    private void bootstrapIfNeededUnsafe() {
         if (bootstrapped) return;
-        synchronized (JsonMapperRegistry.class) {
-            bootstrapIfNeeded();
-        }
+        bootstrapIfNeeded();
     }
 
-    private static void tryLoadMissingGeneratedModules() {
-        JsonMapperRegistry registry = new JsonMapperRegistry();
-        JsonConfig cfg = activeConfig;
-        String override = System.getProperty("uniform.generatedModule");
-        if (override != null && !override.isBlank()) {
-            tryRegisterByName(registry, "io.github.flameyossnowy.uniform.generated." + override.trim(), cfg);
+    private void tryLoadMissingGeneratedModules() {
+        if (generatedModulesAttempted) return;
+
+        synchronized (this) {
+            if (generatedModulesAttempted) return;
+
+            String override = System.getProperty("uniform.generatedModule");
+            if (override != null && !override.isBlank()) {
+                tryRegisterByName(this,
+                        "io.github.flameyossnowy.uniform.generated." + override.trim());
+            }
+            tryRegisterByName(this,
+                    "io.github.flameyossnowy.uniform.generated.UniformGeneratedJsonModule");
+            tryRegisterByName(this,
+                    "io.github.flameyossnowy.uniform.generated.UniformGeneratedJsonModuleJmh");
+
+            generatedModulesAttempted = true;
         }
-        tryRegisterByName(registry, "io.github.flameyossnowy.uniform.generated.UniformGeneratedJsonModule", cfg);
-        tryRegisterByName(registry, "io.github.flameyossnowy.uniform.generated.UniformGeneratedJsonModuleJmh", cfg);
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})

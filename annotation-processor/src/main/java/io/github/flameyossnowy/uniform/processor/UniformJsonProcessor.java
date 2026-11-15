@@ -71,6 +71,8 @@ public final class UniformJsonProcessor extends AbstractProcessor {
             ClassName.get("io.github.flameyossnowy.uniform.json.mappers", "JsonMapperRegistry");
     private static final ClassName JSON_MAPPER =
             ClassName.get("io.github.flameyossnowy.uniform.json.mappers", "JsonMapper");
+    private static final ClassName JSON_ADAPTER =
+            ClassName.get("io.github.flameyossnowy.uniform.json", "JsonAdapter");
     private static final ClassName JSON_READ_CURSOR =
             ClassName.get("io.github.flameyossnowy.uniform.json.parser", "JsonReadCursor");
     private static final ClassName CORE_REGISTRY =
@@ -498,7 +500,6 @@ public final class UniformJsonProcessor extends AbstractProcessor {
                              List<Property> props) throws IOException {
         ClassName jsonCursor = ClassName.get("io.github.flameyossnowy.uniform.json.parser", "JsonReadCursor");
         ClassName jsonMapper = ClassName.get("io.github.flameyossnowy.uniform.json.mappers", "JsonMapper");
-        ClassName jsonConfig = ClassName.get("io.github.flameyossnowy.uniform.json", "JsonConfig");
 
         TypeSpec.Builder classBuilder = TypeSpec.classBuilder(readerName)
                 .addAnnotation(AnnotationSpec.builder(Generated.class)
@@ -506,13 +507,6 @@ public final class UniformJsonProcessor extends AbstractProcessor {
                         .build())
                 .addModifiers(Modifier.PUBLIC, Modifier.FINAL)
                 .addSuperinterface(ParameterizedTypeName.get(jsonMapper, target))
-                .addField(FieldSpec.builder(jsonConfig, "__config",
-                        Modifier.PRIVATE, Modifier.STATIC, Modifier.VOLATILE).build())
-                .addMethod(MethodSpec.methodBuilder("setConfig")
-                        .addModifiers(Modifier.PUBLIC, Modifier.STATIC)
-                        .addParameter(jsonConfig, "cfg")
-                        .addStatement("__config = cfg")
-                        .build())
                 .addField(ParameterizedTypeName.get(jsonMapper, target), "INSTANCE",
                         Modifier.PUBLIC, Modifier.STATIC, Modifier.FINAL)
                 .addStaticBlock(CodeBlock.builder()
@@ -537,6 +531,7 @@ public final class UniformJsonProcessor extends AbstractProcessor {
         MethodSpec readFields = MethodSpec.methodBuilder("readFields")
                 .addModifiers(Modifier.PUBLIC)
                 .returns(target)
+                .addParameter(JSON_ADAPTER, "adapter")
                 .addParameter(jsonCursor, "cursor")
                 .addCode(buildReaderBody(typeElement, target, props))
                 .build();
@@ -545,9 +540,10 @@ public final class UniformJsonProcessor extends AbstractProcessor {
                 .addAnnotation(Override.class)
                 .addModifiers(Modifier.PUBLIC)
                 .returns(target)
+                .addParameter(JSON_ADAPTER, "adapter")
                 .addParameter(jsonCursor, "cursor")
                 .addStatement("if (!cursor.enterObject()) return null")
-                .addStatement("return readFields(cursor)")
+                .addStatement("return readFields(adapter, cursor)")
                 .build();
 
         classBuilder.addMethod(readFields);
@@ -582,7 +578,7 @@ public final class UniformJsonProcessor extends AbstractProcessor {
             }
         }
 
-        cb.addStatement("final boolean __strictDupes = __config != null && __config.hasReadFeature($T.STRICT_DUPLICATE_DETECTION)", readFeature);
+        cb.addStatement("final boolean __strictDupes = adapter.config().hasReadFeature($T.STRICT_DUPLICATE_DETECTION)", readFeature);
         for (Property p : props) {
             cb.addStatement("boolean __seen_$L = false", p.javaName());
         }
@@ -856,12 +852,11 @@ public final class UniformJsonProcessor extends AbstractProcessor {
                 cb.addStatement("if (__supplier == null) throw new IllegalStateException(\"No context-dynamic supplier for \" + $T.class)", t.box());
                 cb.addStatement("Class<?> __impl = __supplier.supply(__ctx)");
             }
-            cb.addStatement("$T __mapper = ($T) $T.getReader(__impl)",
+            cb.addStatement("$T __mapper = ($T) adapter.getReader(__impl)",
                     ParameterizedTypeName.get(jsonMapper, ClassName.get(Object.class)),
-                    ParameterizedTypeName.get(jsonMapper, ClassName.get(Object.class)),
-                    jsonMapperRegistry);
+                    ParameterizedTypeName.get(jsonMapper, ClassName.get(Object.class)));
             cb.addStatement("if (__mapper == null) throw new IllegalStateException(\"No mapper for resolved type \" + __impl)");
-            cb.addStatement("$L = ($T) __mapper.map(__subCursor)", var, t.box());
+            cb.addStatement("$L = ($T) __mapper.map(adapter, __subCursor)", var, t.box());
             return;
         }
 
@@ -872,19 +867,18 @@ public final class UniformJsonProcessor extends AbstractProcessor {
                 cb.beginControlFlow("if (!$L.enterObjectValue())", cursorExpr);
                 cb.addStatement("$L = null", var);
                 cb.nextControlFlow("else");
-                cb.addStatement("$L = (($T) $T.INSTANCE).readFields(($T) $L)",
+                cb.addStatement("$L = (($T) $T.INSTANCE).readFields(adapter, ($T) $L)",
                         var, directReader, directReader,
                         concreteCursor, cursorExpr);
                 cb.addStatement("$L.finishFieldAfterValue()", cursorExpr);
                 cb.endControlFlow();
             } else {
                 cb.addStatement("$T __subCursor = $L.fieldValueCursor()", jsonCursor, cursorExpr);
-                cb.addStatement("$T __mapper = ($T) $T.getReader($T.class)",
+                cb.addStatement("$T __mapper = ($T) adapter.getReader($T.class)",
                         ParameterizedTypeName.get(jsonMapper, t),
-                        ParameterizedTypeName.get(jsonMapper, t),
-                        jsonMapperRegistry, t);
+                        ParameterizedTypeName.get(jsonMapper, t), t);
                 cb.addStatement("if (__mapper == null) throw new IllegalStateException(\"No mapper for \" + $T.class)", t);
-                cb.addStatement("$L = __mapper.map(__subCursor)", var);
+                cb.addStatement("$L = __mapper.map(adapter, __subCursor)", var);
             }
             return;
         }
@@ -910,8 +904,8 @@ public final class UniformJsonProcessor extends AbstractProcessor {
     }
 
     private void emitElementRead(CodeBlock.Builder cb, TypeName elemType,
-                                        ClassName jsonMapper, ClassName jsonMapperRegistry,
-                                        String collVar, String arrCursorExpr) {
+                                 ClassName jsonMapper, ClassName jsonMapperRegistry,
+                                 String collVar, String arrCursorExpr) {
         if (elemType.equals(TypeName.INT)     || elemType.equals(TypeName.INT.box()))     { cb.addStatement("$L.add($L.elementValueAsInt())",     collVar, arrCursorExpr); return; }
         if (elemType.equals(TypeName.LONG)    || elemType.equals(TypeName.LONG.box()))    { cb.addStatement("$L.add($L.elementValueAsLong())",    collVar, arrCursorExpr); return; }
         if (elemType.equals(TypeName.DOUBLE)  || elemType.equals(TypeName.DOUBLE.box()))  { cb.addStatement("$L.add($L.elementValueAsDouble())",  collVar, arrCursorExpr); return; }
@@ -933,7 +927,7 @@ public final class UniformJsonProcessor extends AbstractProcessor {
         if (elemType instanceof ClassName declared) {
             ClassName directReader = readerNameFor(declared);
             cb.beginControlFlow("if ($L.enterObjectElement())", arrCursorExpr);
-            cb.addStatement("$L.add((($T) $T.INSTANCE).readFields(($T) $L))",
+            cb.addStatement("$L.add((($T) $T.INSTANCE).readFields(adapter, ($T) $L))",
                     collVar, directReader, directReader,
                     concreteCursor, arrCursorExpr);
             cb.addStatement("$L.finishElementAfterValue()", arrCursorExpr);
@@ -941,12 +935,11 @@ public final class UniformJsonProcessor extends AbstractProcessor {
             cb.addStatement("$L.add(null)", collVar);
             cb.endControlFlow();
         } else {
-            cb.addStatement("$T __em = ($T) $T.getReader($T.class)",
+            cb.addStatement("$T __em = ($T) adapter.getReader($T.class)",
                     ParameterizedTypeName.get(jsonMapper, elemType),
-                    ParameterizedTypeName.get(jsonMapper, elemType),
-                    jsonMapperRegistry, elemType);
+                    ParameterizedTypeName.get(jsonMapper, elemType), elemType);
             cb.addStatement("if (__em == null) throw new IllegalStateException(\"No mapper for \" + $T.class)", elemType);
-            cb.addStatement("$L.add(($T) __em.map($L.elementValueCursor()))", collVar, elemType.box(), arrCursorExpr);
+            cb.addStatement("$L.add(($T) __em.map(adapter, $L.elementValueCursor()))", collVar, elemType.box(), arrCursorExpr);
         }
     }
 
@@ -960,7 +953,6 @@ public final class UniformJsonProcessor extends AbstractProcessor {
                                      List<Property> props) throws IOException {
         ClassName jsonWriterMapper = ClassName.get("io.github.flameyossnowy.uniform.json.mappers", "JsonWriterMapper");
         ClassName jsonStringWriter = ClassName.get("io.github.flameyossnowy.uniform.json.writers", "JsonStringWriter");
-        ClassName jsonConfig       = ClassName.get("io.github.flameyossnowy.uniform.json", "JsonConfig");
 
         TypeSpec.Builder classBuilder = TypeSpec.classBuilder(writerName)
                 .addAnnotation(AnnotationSpec.builder(Generated.class)
@@ -968,13 +960,6 @@ public final class UniformJsonProcessor extends AbstractProcessor {
                         .build())
                 .addModifiers(Modifier.PUBLIC, Modifier.FINAL)
                 .addSuperinterface(ParameterizedTypeName.get(jsonWriterMapper, target))
-                .addField(FieldSpec.builder(jsonConfig, "__config",
-                        Modifier.PRIVATE, Modifier.STATIC, Modifier.VOLATILE).build())
-                .addMethod(MethodSpec.methodBuilder("setConfig")
-                        .addModifiers(Modifier.PUBLIC, Modifier.STATIC)
-                        .addParameter(jsonConfig, "cfg")
-                        .addStatement("__config = cfg")
-                        .build())
                 .addField(ParameterizedTypeName.get(jsonWriterMapper, target), "INSTANCE",
                         Modifier.PUBLIC, Modifier.STATIC, Modifier.FINAL)
                 .addStaticBlock(CodeBlock.builder()
@@ -998,6 +983,7 @@ public final class UniformJsonProcessor extends AbstractProcessor {
                 .addAnnotation(Override.class)
                 .addModifiers(Modifier.PUBLIC)
                 .returns(TypeName.VOID)
+                .addParameter(JSON_ADAPTER, "adapter")
                 .addParameter(jsonStringWriter, "out")
                 .addParameter(target, "value")
                 .addStatement("if (value == null) { out.nullValue(); return; }")
@@ -1042,7 +1028,7 @@ public final class UniformJsonProcessor extends AbstractProcessor {
         ClassName jsonMapperRegistry = ClassName.get("io.github.flameyossnowy.uniform.json.mappers", "JsonMapperRegistry");
         ClassName writeFeature       = ClassName.get("io.github.flameyossnowy.uniform.json.features", "JsonWriteFeature");
 
-        cb.addStatement("final boolean __writeNulls = __config == null || __config.hasWriteFeature($T.WRITE_NULL_MAP_VALUES)", writeFeature);
+        cb.addStatement("final boolean __writeNulls = adapter.config().hasWriteFeature($T.WRITE_NULL_MAP_VALUES)", writeFeature);
 
         for (Property p : props) {
             String access = switch (p.accessKind()) {
@@ -1118,23 +1104,22 @@ public final class UniformJsonProcessor extends AbstractProcessor {
                 cb.addStatement("out.writeRaw($L)", FIELD_NULL);
                 cb.nextControlFlow("else");
                 if (p.abstractOrInterface()) {
-                    cb.addStatement("$T __w = ($T) $T.getWriter($L.getClass())",
+                    cb.addStatement("$T __w = ($T) adapter.getWriter($L.getClass())",
                             ParameterizedTypeName.get(jsonWriterMapper, ClassName.get(Object.class)),
                             ParameterizedTypeName.get(jsonWriterMapper, ClassName.get(Object.class)),
-                            jsonMapperRegistry, access);
+                            access);
                     cb.addStatement("if (__w == null) throw new IllegalStateException(\"No writer for runtime type \" + $L.getClass())", access);
-                    cb.addStatement("__w.writeTo(out, $L)", access);
+                    cb.addStatement("__w.writeTo(adapter, out, $L)", access);
                 } else if (t instanceof ClassName declared) {
                     ClassName directWriter = writerNameFor(declared);
-                    cb.addStatement("(($T) $T.INSTANCE).writeTo(out, $L)",
+                    cb.addStatement("(($T) $T.INSTANCE).writeTo(adapter, out, $L)",
                             ParameterizedTypeName.get(jsonWriterMapper, t), directWriter, access);
                 } else {
-                    cb.addStatement("$T __w = ($T) $T.getWriter($T.class)",
+                    cb.addStatement("$T __w = ($T) adapter.getWriter($T.class)",
                             ParameterizedTypeName.get(jsonWriterMapper, t),
-                            ParameterizedTypeName.get(jsonWriterMapper, t),
-                            jsonMapperRegistry, t);
+                            ParameterizedTypeName.get(jsonWriterMapper, t), t);
                     cb.addStatement("if (__w == null) throw new IllegalStateException(\"No writer for \" + $T.class)", t);
-                    cb.addStatement("__w.writeTo(out, $L)", access);
+                    cb.addStatement("__w.writeTo(adapter, out, $L)", access);
                 }
                 cb.endControlFlow();
             } else {
@@ -1148,8 +1133,8 @@ public final class UniformJsonProcessor extends AbstractProcessor {
     }
 
     private void emitElementWrite(CodeBlock.Builder cb, String elemExpr, TypeName elemType,
-                                         ClassName jsonWriterMapper, ClassName jsonMapperRegistry,
-                                         boolean inArray) {
+                                  ClassName jsonWriterMapper, ClassName jsonMapperRegistry,
+                                  boolean inArray) {
         String nullValueMethod = inArray ? "arrayNullValue" : "nullValue";
 
         if (elemType.equals(TypeName.INT)    || elemType.equals(TypeName.INT.box())
@@ -1217,19 +1202,19 @@ public final class UniformJsonProcessor extends AbstractProcessor {
             cb.endControlFlow();
         } else if (elemType instanceof ClassName declared) {
             ClassName directWriter = writerNameFor(declared);
-            cb.addStatement("(($T) $T.INSTANCE).writeTo(out, $L)",
+            cb.addStatement("(($T) $T.INSTANCE).writeTo(adapter, out, $L)",
                     ParameterizedTypeName.get(jsonWriterMapper, elemType), directWriter, elemExpr);
 
         } else {
             cb.beginControlFlow("if ($L == null)", elemExpr);
             cb.addStatement("out.$L()", nullValueMethod);
             cb.nextControlFlow("else");
-            cb.addStatement("$T __ew = ($T) $T.getWriter($L.getClass())",
+            cb.addStatement("$T __ew = ($T) adapter.getWriter($L.getClass())",
                     ParameterizedTypeName.get(jsonWriterMapper, ClassName.get(Object.class)),
                     ParameterizedTypeName.get(jsonWriterMapper, ClassName.get(Object.class)),
-                    jsonMapperRegistry, elemExpr);
+                    elemExpr);
             cb.addStatement("if (__ew == null) throw new IllegalStateException(\"No writer for element\")");
-            cb.addStatement("__ew.writeTo(out, $L)", elemExpr);
+            cb.addStatement("__ew.writeTo(adapter, out, $L)", elemExpr);
             cb.endControlFlow();
         }
     }
@@ -1311,9 +1296,8 @@ public final class UniformJsonProcessor extends AbstractProcessor {
 
     private void writeModule(TypeElement type, ClassName target, ClassName readerName, ClassName writerName,
                              ClassName moduleName) throws IOException {
-        ClassName jsonMapperModule   = ClassName.get("io.github.flameyossnowy.uniform.json.mappers", "JsonMapperModule");
+        ClassName jsonMapperModule = ClassName.get("io.github.flameyossnowy.uniform.json.mappers", "JsonMapperModule");
         ClassName jsonMapperRegistry = ClassName.get("io.github.flameyossnowy.uniform.json.mappers", "JsonMapperRegistry");
-        ClassName jsonConfig         = ClassName.get("io.github.flameyossnowy.uniform.json", "JsonConfig");
 
         boolean collection = isInstantiableCollection(type);
 
@@ -1323,15 +1307,6 @@ public final class UniformJsonProcessor extends AbstractProcessor {
                 .addParameter(jsonMapperRegistry, "registry");
         addRegistrations(register, collection, target, readerName, writerName, jsonMapperRegistry);
 
-        MethodSpec.Builder registerWithConfig = MethodSpec.methodBuilder("register")
-                .addAnnotation(Override.class)
-                .addModifiers(Modifier.PUBLIC)
-                .addParameter(jsonMapperRegistry, "registry")
-                .addParameter(jsonConfig, "config")
-                .addStatement("$T.setConfig(config)", readerName)
-                .addStatement("$T.setConfig(config)", writerName);
-        addRegistrations(registerWithConfig, collection, target, readerName, writerName, jsonMapperRegistry);
-
         TypeSpec module = TypeSpec.classBuilder(moduleName)
                 .addAnnotation(AnnotationSpec.builder(Generated.class)
                         .addMember("value", "\"io.github.flameyossnowy.uniform.processor.UniformJsonProcessor\"")
@@ -1339,7 +1314,6 @@ public final class UniformJsonProcessor extends AbstractProcessor {
                 .addModifiers(Modifier.PUBLIC, Modifier.FINAL)
                 .addSuperinterface(jsonMapperModule)
                 .addMethod(register.build())
-                .addMethod(registerWithConfig.build())
                 .build();
 
         JavaFile.builder(moduleName.packageName(), module).build().writeTo(processingEnv.getFiler());
@@ -1594,7 +1568,7 @@ public final class UniformJsonProcessor extends AbstractProcessor {
         }
 
         if (box.equals(ClassName.OBJECT)) {
-            cb.addStatement("$L = $T.readUntyped($L.$LValueCursor())", target, JSON_MAPPER_REGISTRY, cur, slot);
+            cb.addStatement("$L = $T.readUntyped(adapter, $L.$LValueCursor())", target, JSON_MAPPER_REGISTRY, cur, slot);
             return;
         }
 
@@ -1700,13 +1674,13 @@ public final class UniformJsonProcessor extends AbstractProcessor {
         if (t instanceof ClassName declared) {
             cb.addStatement("$T $L = $L.$LValueCursor()", JSON_READ_CURSOR, sub, cur, slot);
             if (hasGeneratedMapper(declared)) {
-                cb.addStatement("$L = $T.INSTANCE.map($L)", target, readerNameFor(declared), sub);
+                cb.addStatement("$L = $T.INSTANCE.map(adapter, $L)", target, readerNameFor(declared), sub);
             } else {
                 String m = "__mp" + d;
                 TypeName mapperType = ParameterizedTypeName.get(JSON_MAPPER, t);
-                cb.addStatement("$T $L = ($T) $T.getReader($T.class)", mapperType, m, mapperType, JSON_MAPPER_REGISTRY, t);
+                cb.addStatement("$T $L = ($T) adapter.getReader($T.class)", mapperType, m, mapperType, t);
                 cb.addStatement("if ($L == null) throw new IllegalStateException(\"No mapper for \" + $T.class)", m, t);
-                cb.addStatement("$L = $L.map($L)", target, m, sub);
+                cb.addStatement("$L = $L.map(adapter, $L)", target, m, sub);
             }
             return;
         }

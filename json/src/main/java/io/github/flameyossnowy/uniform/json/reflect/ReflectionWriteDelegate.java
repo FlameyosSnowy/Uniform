@@ -1,5 +1,6 @@
 package io.github.flameyossnowy.uniform.json.reflect;
 
+import io.github.flameyossnowy.uniform.json.JsonAdapter;
 import io.github.flameyossnowy.uniform.json.mappers.JsonWriterMapper;
 import io.github.flameyossnowy.uniform.json.mappers.JsonMapperRegistry;
 import io.github.flameyossnowy.uniform.json.writers.JsonStringWriter;
@@ -12,7 +13,7 @@ import java.util.Map;
 public final class ReflectionWriteDelegate {
     private ReflectionWriteDelegate() {}
 
-    public static void write(ReflectionMetadata meta, JsonStringWriter out, Object value) {
+    public static void write(JsonAdapter adapter, ReflectionMetadata meta, JsonStringWriter out, Object value) {
         if (value == null) {
             out.nullValue();
             return;
@@ -30,14 +31,14 @@ public final class ReflectionWriteDelegate {
             }
 
             out.name(prop.name());
-            writeValue(out, propValue, prop.type());
+            writeValue(adapter, out, propValue, prop.type());
         }
 
         out.endObject();
     }
 
     @SuppressWarnings("unchecked")
-    private static void writeValue(JsonStringWriter out, Object value, Class<?> declaredType) {
+    private static void writeValue(JsonAdapter adapter, JsonStringWriter out, Object value, Class<?> declaredType) {
         if (value == null) {
             out.nullValue();
             return;
@@ -68,29 +69,29 @@ public final class ReflectionWriteDelegate {
             }
 
             if (type.isArray()) {
-                writeArray(out, value, type.getComponentType());
+                writeArray(adapter, out, value, type.getComponentType());
                 return;
             }
 
             if (value instanceof Collection<?> col) {
-                writeCollection(out, col);
+                writeCollection(adapter, out, col);
                 return;
             }
 
             if (value instanceof Map<?, ?> map) {
-                writeMap(out, map);
+                writeMap(adapter, out, map);
                 return;
             }
 
             JsonWriterMapper<Object> writer =
-                (JsonWriterMapper<Object>) JsonMapperRegistry.getWriter(type);
+                (JsonWriterMapper<Object>) adapter.getWriter(type);
 
             if (writer == null && isReflectable(type)) {
                 writer = (JsonWriterMapper<Object>) ReflectionMapperFactory.buildWriter(type);
             }
 
             if (writer != null) {
-                writer.writeTo(out, value);
+                writer.writeTo(adapter, out, value);
                 return;
             }
 
@@ -100,39 +101,39 @@ public final class ReflectionWriteDelegate {
         out.nullValue();
     }
 
-    private static void writeArray(JsonStringWriter out, Object array, Class<?> componentType) {
+    private static void writeArray(JsonAdapter adapter, JsonStringWriter out, Object array, Class<?> componentType) {
         out.beginArray();
 
         int len = Array.getLength(array);
         for (int i = 0; i < len; i++) {
             Object elem = Array.get(array, i);
-            writeValue(out, elem, componentType);
+            writeValue(adapter, out, elem, componentType);
         }
 
         out.endArray();
     }
 
-    private static void writeCollection(JsonStringWriter out, Collection<?> col) {
+    private static void writeCollection(JsonAdapter adapter, JsonStringWriter out, Collection<?> col) {
         out.beginArray();
 
         for (Object elem : col) {
             if (elem == null) {
                 out.nullValue();
             } else {
-                writeValue(out, elem, elem.getClass());
+                writeValue(adapter, out, elem, elem.getClass());
             }
         }
 
         out.endArray();
     }
 
-    private static void writeMap(JsonStringWriter out, Map<?, ?> map) {
+    private static void writeMap(JsonAdapter adapter, JsonStringWriter out, Map<?, ?> map) {
         out.beginObject();
         for (Map.Entry<?, ?> entry : map.entrySet()) {
             out.name(String.valueOf(entry.getKey()));
             Object v = entry.getValue();
             if (v == null) out.nullValue();
-            else writeValue(out, v, v.getClass());
+            else writeValue(adapter, out, v, v.getClass());
         }
         out.endObject();
     }

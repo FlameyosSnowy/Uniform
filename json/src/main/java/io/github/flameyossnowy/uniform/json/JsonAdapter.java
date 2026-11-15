@@ -42,6 +42,7 @@ import java.util.concurrent.ForkJoinPool;
 public class JsonAdapter {
     private final JsonConfig config;
     private final Executor executor;
+    private final JsonMapperRegistry mapperRegistry;
 
     public JsonAdapter(JsonConfig config) {
         this(config, ForkJoinPool.commonPool());
@@ -54,9 +55,9 @@ public class JsonAdapter {
      * @param executor the executor used to run async read/write tasks
      */
     public JsonAdapter(JsonConfig config, Executor executor) {
-        this.config = config;
-        this.executor = executor;
-        JsonMapperRegistry.applyConfig(config);
+        this.config = Objects.requireNonNull(config);
+        this.executor = Objects.requireNonNull(executor);
+        this.mapperRegistry = new JsonMapperRegistry(config);
     }
 
     public static JsonConfigBuilder configBuilder() {
@@ -69,10 +70,10 @@ public class JsonAdapter {
     }
 
     public <T> T readValue(@NotNull JsonValue json, Class<T> type) {
-        JsonMapper<T> mapper = (JsonMapper<T>) JsonMapperRegistry.getReader(type);
+        JsonMapper<T> mapper = (JsonMapper<T>) mapperRegistry.getReader(type);
         validateMapper(type, mapper);
         JsonObjectCursor cursor = JsonCursors.createJsonValueMap(json);
-        return mapper.map(cursor);
+        return mapper.map(this, cursor);
     }
 
     private static <T> void validateMapper(Class<T> type, JsonMapper<T> mapper) {
@@ -92,28 +93,28 @@ public class JsonAdapter {
     }
 
     public <T> T readValue(byte[] bytes, Class<T> type) {
-        JsonMapper<T> mapper = (JsonMapper<T>) JsonMapperRegistry.getReader(type);
+        JsonMapper<T> mapper = (JsonMapper<T>) mapperRegistry.getReader(type);
         validateMapper(type, mapper);
         JsonCursor cursor = JsonCursors.createNormal(bytes, config);
-        return mapper.map(cursor);
+        return mapper.map(this, cursor);
     }
 
     public <T> T readValue(InputStream inputStream, Class<T> type) {
-        JsonMapper<T> mapper = (JsonMapper<T>) JsonMapperRegistry.getReader(type);
+        JsonMapper<T> mapper = (JsonMapper<T>) mapperRegistry.getReader(type);
         validateMapper(type, mapper);
         try {
             JsonCursor cursor = JsonCursors.createNormal(inputStream.readAllBytes(), config);
-            return mapper.map(cursor);
+            return mapper.map(this, cursor);
         } catch (IOException e) {
             throw JsonException.io(e);
         }
     }
 
     public <T> T readValue(Map<String, Object> map, Class<T> type) {
-        JsonMapper<T> mapper = (JsonMapper<T>) JsonMapperRegistry.getReader(type);
+        JsonMapper<T> mapper = (JsonMapper<T>) mapperRegistry.getReader(type);
         validateMapper(type, mapper);
         MapJsonCursor cursor = JsonCursors.createMap(map);
-        return mapper.map(cursor);
+        return mapper.map(this, cursor);
     }
 
 
@@ -191,19 +192,19 @@ public class JsonAdapter {
     }
 
     public <T> @NotNull String writeValue(@NotNull T value) {
-        JsonWriterMapper<T> writerMapper = (JsonWriterMapper<T>) JsonMapperRegistry.getWriter(value.getClass());
+        JsonWriterMapper<T> writerMapper = (JsonWriterMapper<T>) mapperRegistry.getWriter(value.getClass());
         if (writerMapper == null)
             throw new IllegalStateException("No JsonWriterMapper registered for " + value.getClass().getName()
-                + ". Ensure the class is annotated with  and was processed by the annotation processor.");
-        return writerMapper.write(value);
+                    + ". Ensure the class is annotated with  and was processed by the annotation processor.");
+        return writerMapper.write(this, value);
     }
 
     public <T> byte[] writeValueAsBytes(@NotNull T value) {
-        JsonWriterMapper<T> writerMapper = (JsonWriterMapper<T>) JsonMapperRegistry.getWriter(value.getClass());
+        JsonWriterMapper<T> writerMapper = (JsonWriterMapper<T>) mapperRegistry.getWriter(value.getClass());
         if (writerMapper == null)
             throw new IllegalStateException("No JsonWriterMapper registered for " + value.getClass().getName()
-                + ". Ensure the class is annotated with  and was processed by the annotation processor.");
-        return writerMapper.writeAsBytes(value);
+                    + ". Ensure the class is annotated with  and was processed by the annotation processor.");
+        return writerMapper.writeAsBytes(this, value);
     }
 
     /**
@@ -232,13 +233,13 @@ public class JsonAdapter {
      */
     @SuppressWarnings("unchecked")
     public <T> @NotNull JsonObject valueToTree(@NotNull T entity) {
-        JsonWriterMapper<T> writer = (JsonWriterMapper<T>) JsonMapperRegistry.getWriter(entity.getClass());
+        JsonWriterMapper<T> writer = (JsonWriterMapper<T>) mapperRegistry.getWriter(entity.getClass());
         if (writer == null)
             throw new IllegalStateException("No JsonWriterMapper registered for " + entity.getClass().getName()
-                + ". Ensure the class is annotated with  and was processed by the annotation processor.");
+                    + ". Ensure the class is annotated with  and was processed by the annotation processor.");
 
         JsonDomBuilder builder = new JsonDomBuilder();
-        writer.writeTo(builder, entity);
+        writer.writeTo(this, builder, entity);
         return builder.result();
     }
 
@@ -278,17 +279,17 @@ public class JsonAdapter {
 
         if (!(tree instanceof JsonObject obj))
             throw new IllegalStateException(
-                "Cannot map " + tree.getClass().getSimpleName() + " to " + type.getName()
-                    + " - expected a JsonObject. If this is a custom type, register a "
-                    + "CoreTypeResolver via CoreTypeResolverRegistry.INSTANCE.register(...).");
+                    "Cannot map " + tree.getClass().getSimpleName() + " to " + type.getName()
+                            + " - expected a JsonObject. If this is a custom type, register a "
+                            + "CoreTypeResolver via CoreTypeResolverRegistry.INSTANCE.register(...).");
 
-        JsonMapper<T> mapper = (JsonMapper<T>) JsonMapperRegistry.getReader(type);
+        JsonMapper<T> mapper = (JsonMapper<T>) mapperRegistry.getReader(type);
         if (mapper == null)
             throw new IllegalStateException("No JsonMapper registered for " + type.getName()
-                + ". Ensure the class is annotated with  and was processed "
-                + "by the annotation processor, or register a CoreTypeResolver for it.");
+                    + ". Ensure the class is annotated with  and was processed "
+                    + "by the annotation processor, or register a CoreTypeResolver for it.");
 
-        return mapper.map(new JsonDomCursor(obj));
+        return mapper.map(this, new JsonDomCursor(obj));
     }
 
     /**
@@ -296,8 +297,8 @@ public class JsonAdapter {
      * each converted to {@code elementType} via {@link #treeToValue}.
      */
     public <E> @NotNull List<E> treeToList(
-        @NotNull JsonArray array,
-        @NotNull Class<E> elementType) {
+            @NotNull JsonArray array,
+            @NotNull Class<E> elementType) {
         List<E> result = new ArrayList<>(array.size());
         for (int i = 0; i < array.size(); i++) {
             result.add(treeToValue(array.getRaw(i), elementType));
@@ -310,8 +311,8 @@ public class JsonAdapter {
      * whose elements are each converted to {@code elementType} via {@link #treeToValue}.
      */
     public <E> @NotNull Set<E> treeToSet(
-        @NotNull JsonArray array,
-        @NotNull Class<E> elementType) {
+            @NotNull JsonArray array,
+            @NotNull Class<E> elementType) {
         Set<E> result = new LinkedHashSet<>(array.size() * 2);
         for (int i = 0; i < array.size(); i++) {
             result.add(treeToValue(array.getRaw(i), elementType));
@@ -326,8 +327,8 @@ public class JsonAdapter {
      * Not tolerant to elements of null; Use {@link JsonAdapter#treeToLinkedList(JsonArray, Class)} if you want nullable elements.
      */
     public <E> @NotNull Queue<E> treeToQueue(
-        @NotNull JsonArray array,
-        @NotNull Class<E> elementType) {
+            @NotNull JsonArray array,
+            @NotNull Class<E> elementType) {
         ArrayDeque<E> result = new ArrayDeque<>(array.size());
         for (int i = 0; i < array.size(); i++) {
             result.add(Objects.requireNonNull(treeToValue(array.getRaw(i), elementType), "Null not accepted in treeToQueue. Use JsonAdapter#treeToLinkedList if this is intended behavior"));
@@ -340,8 +341,8 @@ public class JsonAdapter {
      * each converted to {@code elementType} via {@link #treeToValue}.
      */
     public <E> @NotNull LinkedList<E> treeToLinkedList(
-        @NotNull JsonArray array,
-        @NotNull Class<E> elementType) {
+            @NotNull JsonArray array,
+            @NotNull Class<E> elementType) {
         LinkedList<E> result = new LinkedList<>();
         for (int i = 0; i < array.size(); i++) {
             result.add(treeToValue(array.getRaw(i), elementType));
@@ -354,8 +355,8 @@ public class JsonAdapter {
      * keys and values converted to {@code valueType} via {@link #treeToValue}.
      */
     public <V> @NotNull Map<String, V> treeToMap(
-        @NotNull JsonObject obj,
-        @NotNull Class<V> valueType) {
+            @NotNull JsonObject obj,
+            @NotNull Class<V> valueType) {
         Map<String, V> result = new LinkedHashMap<>(obj.size() * 2);
         for (Map.Entry<String, JsonValue> entry : obj) {
             result.put(entry.getKey(), treeToValue(entry.getValue(), valueType));
@@ -424,12 +425,28 @@ public class JsonAdapter {
 
     public JsonWriter createWriter(JsonWriterOptions... options) {
         return JsonWriterFactory.builder(config)
-            .addOptions(options)
-            .build();
+                .addOptions(options)
+                .build();
     }
 
     public JsonConfig config() {
         return config;
+    }
+
+    /**
+     * Resolves a reader through this adapter's registry and configuration.
+     * Generated and custom mappers should use this method for nested values.
+     */
+    public JsonMapper<?> getReader(Class<?> type) {
+        return mapperRegistry.getReader(type);
+    }
+
+    /**
+     * Resolves a writer through this adapter's registry and configuration.
+     * Generated and custom mappers should use this method for nested values.
+     */
+    public JsonWriterMapper<?> getWriter(Class<?> type) {
+        return mapperRegistry.getWriter(type);
     }
 
     public Executor executor() {
@@ -442,7 +459,7 @@ public class JsonAdapter {
         if (obj == null || obj.getClass() != this.getClass()) return false;
         var that = (JsonAdapter) obj;
         return Objects.equals(this.config, that.config) &&
-            Objects.equals(this.executor, that.executor);
+                Objects.equals(this.executor, that.executor);
     }
 
     @Override
@@ -456,8 +473,8 @@ public class JsonAdapter {
     @Override
     public String toString() {
         return "JsonAdapter[" +
-            "config=" + config + ", " +
-            "executor=" + executor + ']';
+                "config=" + config + ", " +
+                "executor=" + executor + ']';
     }
 
 }

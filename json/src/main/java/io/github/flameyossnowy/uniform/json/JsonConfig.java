@@ -3,6 +3,7 @@ package io.github.flameyossnowy.uniform.json;
 import io.github.flameyossnowy.uniform.json.features.JsonReadFeature;
 import io.github.flameyossnowy.uniform.json.features.JsonWriteFeature;
 
+import java.sql.Ref;
 import java.util.EnumSet;
 
 public record JsonConfig(
@@ -12,6 +13,11 @@ public record JsonConfig(
     EnumSet<JsonWriteFeature> writeFeatures,
     ReflectionConfig reflectionConfig
 ) {
+    private static final JsonConfig DEFAULTS = new JsonConfig(false, 4, EnumSet.noneOf(JsonReadFeature.class), EnumSet.noneOf(JsonWriteFeature.class), ReflectionConfig.DEFAULT);
+
+    public static JsonConfig defaults() {
+        return DEFAULTS;
+    }
     
     public JsonConfig {
         if (readFeatures == null) {

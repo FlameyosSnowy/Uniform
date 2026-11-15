@@ -86,6 +86,8 @@ public interface JsonReadCursor {
      */
     @NotNull String elementValueParseString();
 
+    boolean enterObjectElement();
+
     /**
      * Called after a nested parse initiated by {@link #enterObjectValue()} (or the
      * array equivalent) has completed, to restore the outer cursor to a consistent
@@ -104,6 +106,8 @@ public interface JsonReadCursor {
      * to fix up.
      */
     void finishFieldAfterValue();
+
+    void finishElementAfterValue();
 
     /**
      * Advances to the next field of the current object, populating the

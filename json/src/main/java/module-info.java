@@ -5,6 +5,7 @@ module Uniform.json.main {
     requires org.jetbrains.annotations;
     requires TurboScanner.main;
     requires Uniform.core.main;
+    requires java.sql;
 
     exports io.github.flameyossnowy.uniform.json;
     exports io.github.flameyossnowy.uniform.json.exceptions;

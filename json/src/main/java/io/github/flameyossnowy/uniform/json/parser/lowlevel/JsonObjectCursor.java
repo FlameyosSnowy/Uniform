@@ -102,6 +102,11 @@ public final class JsonObjectCursor implements JsonReadCursor {
     }
 
     @Override
+    public void finishElementAfterValue() {
+
+    }
+
+    @Override
     public boolean nextField() {
         if (!entered || entryIterator == null || !entryIterator.hasNext()) return false;
         Map.Entry<String, JsonValue> entry = entryIterator.next();
@@ -220,6 +225,17 @@ public final class JsonObjectCursor implements JsonReadCursor {
     @Override
     public @NotNull String elementValueParseString() {
         return toString(currentElement);
+    }
+
+    @Override
+    public boolean enterObjectElement() {
+        if (!(currentElement instanceof JsonObject obj)) return false;
+
+        entryIterator = obj.getMutableMap().entrySet().iterator();
+        currentKey = null;
+        currentValue = null;
+        entered = true;
+        return true;
     }
 
     private static JsonObjectCursor subCursor(JsonValue v) {
